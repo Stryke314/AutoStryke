@@ -1,0 +1,24 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.13.35825.156
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "AutoStryke", "AutoStryke\AutoStryke.csproj", "{B503585C-C049-471D-862C-8DD1ACDE1A0E}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{B503585C-C049-471D-862C-8DD1ACDE1A0E}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{B503585C-C049-471D-862C-8DD1ACDE1A0E}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{B503585C-C049-471D-862C-8DD1ACDE1A0E}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{B503585C-C049-471D-862C-8DD1ACDE1A0E}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ExtensibilityGlobals) = postSolution
+		SolutionGuid = {7B4747ED-4402-4AB4-B10D-EA6F908A20D6}
+	EndGlobalSection
+EndGlobal
