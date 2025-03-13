@@ -55,7 +55,7 @@ namespace AutoStrykeNew
 
             // Register the slash commands properly
             var slashcommandsconfig = client.UseSlashCommands();
-            slashcommandsconfig.RegisterCommands<slashcommandstest>(1320708926827790336); // Register your slash commands
+            slashcommandsconfig.RegisterCommands<slashcommandstest>(); 
 
             // Register normal commands
             commands.RegisterCommands<Commands.Commands>();
