@@ -1,14 +1,14 @@
 ﻿using AutoStrykeNew.config;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
+using DSharpPlus.SlashCommands;
 using DSharpPlus.EventArgs;
 using Newtonsoft.Json;
 using System;
 using System.IO;
 using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
+using AutoStryke.slash;
+
 
 
 namespace AutoStrykeNew
@@ -25,6 +25,8 @@ namespace AutoStrykeNew
 
             var jsonreader = new jsonreader();
             await jsonreader.ReadJSON();
+
+
 
             var discordconfig = new DiscordConfiguration()
             {
@@ -50,9 +52,14 @@ namespace AutoStrykeNew
 
 
             commands = client.UseCommandsNext(commandsconfig);
-            commands.RegisterCommands<Commands.Commands>();
-            commands.RegisterCommands<Commands.AuraCommands>();
 
+            // Register the slash commands properly
+            var slashcommandsconfig = client.UseSlashCommands();
+            slashcommandsconfig.RegisterCommands<slashcommandstest>(1320708926827790336); // Register your slash commands
+
+            // Register normal commands
+            commands.RegisterCommands<Commands.Commands>();
+            //commands.RegisterCommands<Commands.AuraCommands>();
             await client.ConnectAsync();
             await Task.Delay(-1);
         }

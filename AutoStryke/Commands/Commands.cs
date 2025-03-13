@@ -37,9 +37,20 @@ namespace AutoStrykeNew.Commands
         }
 
 
+
+        [Command("j")]
+
+        public async Task joke(CommandContext ctx)
+        {
+            string response = @"Nah you can't get outta this one with a /j tut tut";
+
+            await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
+        }
+
+
     }
 
-
+    /*
     public class AuraCommands : BaseCommandModule
     {
 
@@ -359,6 +370,8 @@ namespace AutoStrykeNew.Commands
             await ctx.Channel.SendMessageAsync(embed: leaderboard).ConfigureAwait(false);
         }
 
+   
     }
+    */
 
 }
