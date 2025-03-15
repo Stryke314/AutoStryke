@@ -47,6 +47,15 @@ namespace AutoStrykeNew.Commands
             await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
         }
 
+        [Command("pwea")]
+
+        //sends a document of best players to watch for each agent
+        public async Task playerstowatch(CommandContext ctx)
+        {
+            string response = @"https://sites.google.com/view/pwea/home";
+
+            await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
+        }
 
     }
 
