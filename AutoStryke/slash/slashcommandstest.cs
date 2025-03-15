@@ -9,6 +9,7 @@ using System.Threading.Tasks;
 using AutoStrykeNew;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.CommandsNext.Attributes;
+using System.Reflection;
 
 namespace AutoStryke.slash
 {
@@ -37,7 +38,8 @@ namespace AutoStryke.slash
             int points = GetAuraPoints(ctx.Guild.Id, member);
 
             // Generate description based on the points
-            string description = GenerateDescription(member, points);
+            string description = GenerateDescription(member, ctx.Member, points);
+
 
             //  send embed
             await SendAuraEmbedAsync(ctx, member, description);
@@ -54,48 +56,59 @@ namespace AutoStryke.slash
         }
 
         // Function to generate the description based on the points
-        private string GenerateDescription(DiscordMember member, int points)
+        private string GenerateDescription(DiscordMember targetMember, DiscordMember commandUser, int points)
         {
-            if (member.Username.ToLower() == "lyriscenic")
+            // Determine if the user is checking their own aura or someone else's
+            bool isSelf = targetMember.Id == commandUser.Id;
+            string pronoun = isSelf ? "your" : "their";
+            string possessiveName = isSelf ? "your" : $"{targetMember.Mention}'s"; // Possessive form for names
+
+            // Special cases for specific users
+            if (targetMember.Username.ToLower() == "lyriscenic")
             {
-                return $"{member.Mention}, you have {points} silly point{(points == 1 ? "" : "s")}.";
+                return $"{targetMember.Mention} {(isSelf ? "You have" : $"{targetMember.DisplayName} has")} {points} silly point{(points == 1 ? "" : "s")}.";
             }
-            if (member.Username.ToLower() == "chocolatefall")
+            if (targetMember.Username.ToLower() == "chocolatefall")
             {
-                return $"{member.Mention}, you have {points} stellar jade{(points == 1 ? "" : "s")}.";
+                return $"{targetMember.Mention} {(isSelf ? "You have" : $"{targetMember.DisplayName} has")} {points} stellar jade{(points == 1 ? "" : "s")}.";
+            }
+            if (targetMember.Username.ToLower() == "squirr0l")
+            {
+                return $"{targetMember.Mention} {(isSelf ? "You have" : $"{targetMember.DisplayName} has")} {points} cringe point{(points == 1 ? "" : "s")}.";
             }
 
+            // Standard aura descriptions
             if (points == 69)
             {
-                return $"{member.Mention}, you have 69 points. A perfect number if you ask me.";
+                return $"{targetMember.Mention}, {(isSelf ? "You have" : $" has")} 69 points. A perfect number if you ask me.";
             }
             else if (points > 0 && points <= 1000)
             {
-                return $"{member.Mention}, your aura twinkles with a warm glow, pulsing with {points} aura point{(points == 1 ? "" : "s")}.";
+                return $"{(isSelf ? targetMember.Mention + "," : "")} {possessiveName} aura twinkles with a warm glow, pulsing with {points} aura point{(points == 1 ? "" : "s")}.";
             }
             else if (points > 1000 && points <= 5000)
             {
-                return $"{member.Mention}, your aura radiates with a bright light of {points} aura point{(points == 1 ? "" : "s")}.";
+                return $"{(isSelf ? targetMember.Mention + "," : "")} {possessiveName} aura radiates with a bright light of {points} aura point{(points == 1 ? "" : "s")}.";
             }
             else if (points > 5000)
             {
-                return $"{member.Mention}, your aura blinds your allies due to your {points} aura point{(points == 1 ? "" : "s")}.";
+                return $"{(isSelf ? targetMember.Mention + "," : "")} {possessiveName} aura blinds {(isSelf ? "your" : "their")} allies due to {(isSelf ? "your" : "their")} {points} aura point{(points == 1 ? "" : "s")}.";
             }
             else if (points < 0 && points >= -1000)
             {
-                return $"{member.Mention}, Your aura is tinged with negativity, as you bear {points} negative point{(System.Math.Abs(points) == 1 ? "" : "s")}.";
+                return $"{(isSelf ? targetMember.Mention + "," : "")} {possessiveName} aura is tinged with negativity, as {(isSelf ? "you bear" : "they bear")} {points} negative point{(Math.Abs(points) == 1 ? "" : "s")}.";
             }
             else if (points < -1000 && points >= -5000)
             {
-                return $"{member.Mention}, A somber shadow envelops you, as you bear {points} negative point{(System.Math.Abs(points) == 1 ? "" : "s")}.";
+                return $"{(isSelf ? targetMember.Mention + "," : "")} A somber shadow envelops {possessiveName} aura, as {(isSelf ? "you bear" : "they bear")} {points} negative point{(Math.Abs(points) == 1 ? "" : "s")}.";
             }
             else if (points < -5000)
             {
-                return $"{member.Mention}, Your aura is completely consumed by darkness, bearing a massive {points} negative aura point{(points == 1 ? "" : "s")}. You might want to reflect on your actions!";
+                return $"{(isSelf ? targetMember.Mention + "," : "")} {possessiveName} aura is completely consumed by darkness, bearing a massive {points} negative aura point{(Math.Abs(points) == 1 ? "" : "s")}. {(isSelf ? "You might want to reflect on your actions!" : "They might want to reflect on their actions!")}";
             }
-            else
+            else // **Fixed Balanced Aura Message**
             {
-                return $"{member.Mention}, your aura is perfectly balanced, you have 0 points.";
+                return $"{(isSelf ? targetMember.Mention + "," : "")} {possessiveName} aura is perfectly balanced. {(isSelf ? "You have" : "They have")} 0 points.";
             }
         }
 
@@ -153,7 +166,7 @@ namespace AutoStryke.slash
                     string userName = user != null ? user.DisplayName : "Unknown User";
                     if (index == 0) // Top user
                     {
-                        userName = $"👑 {userName}"; // Add crown emoji for the top user
+                        userName = $"👑 {userName}"; // top user
                     }
 
                     leaderboard.AddField(userName, $"{points} aura point{(points == 1 ? "" : "s")}");
