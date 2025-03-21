@@ -57,6 +57,16 @@ namespace AutoStrykeNew.Commands
             await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
         }
 
+        [Command("articulate")]
+
+        //sends a document of best players to watch for each agent
+        public async Task articulate(CommandContext ctx)
+        {
+            string response = @"https://cdn.discordapp.com/attachments/1320708926827790339/1352774536361279568/Screenshot_2025-03-21_224044.png?ex=67df3cf6&is=67ddeb76&hm=0ee5a4c30b964120e9713807a2494ef02588f5984e866f530a9eecbd3bfffc7c&";
+
+            await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
+        }
+
     }
 
     /*
