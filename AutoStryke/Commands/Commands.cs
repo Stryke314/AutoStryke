@@ -87,6 +87,18 @@ namespace AutoStrykeNew.Commands
             await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
         }
 
+        [Command("stryke2")]
+
+        //sends a document of best players to watch for each agent
+        public async Task stryke(CommandContext ctx)
+        {
+            string response = @"your mums a sea creature";
+
+            await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
+        }
+
+
+
     }
     
     /*
