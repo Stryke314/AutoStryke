@@ -72,7 +72,7 @@ namespace AutoStrykeNew.Commands
         //sends a document of best players to watch for each agent
         public async Task astra(CommandContext ctx)
         {
-            string response = @"I HAVE HJAD ENOUGG OF THESE SMELLY ASTRA PLAYERS! NO!?!?! STOP PLAYING THIS FRAKY AGENT!!!!! There ks no particular need to have astra on your life you are trolling yourself and your rr there are so many fun real actual valorant agents to spend you time playing. This is nonsense! How on earth does placing a star grant your tiny brain enjoyment????? You chose ""KnOCkIng tHeM"" over ""MMMMMMMH"" omen teleport. I am disappointed in you. WHY DO I SOUND LIKE THAT SQUIZZ BLOKE?' ON GOLLY ITS TIME TO PLAY OMEN CLOVE AND VIPER PLEAAAAAAAASE ANYTHING BUT ""WORLD DIVIDED"" you don't need to ult for a smoke";
+            string response = @"https://cdn.discordapp.com/attachments/1282036944611708972/1353137838526431282/quote_1343343367169376346-2.png?ex=67e08f50&is=67df3dd0&hm=51cfd2b861a78d2047a9c3da2a5ae56b2bfc5c4a9319a81a883cd03a87e135cf&";
 
             await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
         }
