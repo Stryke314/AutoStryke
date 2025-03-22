@@ -82,7 +82,7 @@ namespace AutoStrykeNew.Commands
         //sends a document of best players to watch for each agent
         public async Task yappanese(CommandContext ctx)
         {
-            string response = @"https://cdn.discordapp.com/attachments/1320708926827790339/1353130074890829895/Untitled_video_-_Made_with_Clipchamp_8.mp4?ex=67e08815&is=67df3695&hm=15ad97c3fe97f4be83b1a575c1abb420c122e7016661fdfa431447d3606415fa&";
+            string response = @"https://cdn.discordapp.com/attachments/1320708926827790339/1353137479833751552/yappanese.mp4?ex=67e08efb&is=67df3d7b&hm=732a4d5a4c4cf20af0470d69558d7e07e646ba5b89298cf28708e1d99e2bf268&";
 
             await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
         }
