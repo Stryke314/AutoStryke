@@ -62,7 +62,7 @@ namespace AutoStrykeNew.Commands
         //sends a document of best players to watch for each agent
         public async Task articulate(CommandContext ctx)
         {
-            string response = @"I HAVE HJAD ENOUGG OF THESE SMELLY ASTRA PLAYERS! NO!?!?! STOP PLAYING THIS FRAKY AGENT!!!!! There ks no particular need to have astra on your life you are trolling yourself and your rr there are so many fun real actual valorant agents to spend you time playing. This is nonsense! How on earth does placing a star grant your tiny brain enjoyment????? You chose ""KnOCkIng tHeM"" over ""MMMMMMMH"" omen teleport. I am disappointed in you. WHY DO I SOUND LIKE THAT SQUIZZ BLOKE?' ON GOLLY ITS TIME TO PLAY OMEN CLOVE AND VIPER PLEAAAAAAAASE ANYTHING BUT ""WORLD DIVIDED"" you don't need to ult for a smoke";
+            string response = @"https://cdn.discordapp.com/attachments/1320708926827790339/1352774536361279568/Screenshot_2025-03-21_224044.png?ex=67dfe5b6&is=67de9436&hm=a15b43b7c4e67e42af5b63439b0f44183ffa6e1fe957da1131f0c77d97c808dc&";
 
             await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
         }
@@ -72,7 +72,17 @@ namespace AutoStrykeNew.Commands
         //sends a document of best players to watch for each agent
         public async Task astra(CommandContext ctx)
         {
-            string response = @"";
+            string response = @"I HAVE HJAD ENOUGG OF THESE SMELLY ASTRA PLAYERS! NO!?!?! STOP PLAYING THIS FRAKY AGENT!!!!! There ks no particular need to have astra on your life you are trolling yourself and your rr there are so many fun real actual valorant agents to spend you time playing. This is nonsense! How on earth does placing a star grant your tiny brain enjoyment????? You chose ""KnOCkIng tHeM"" over ""MMMMMMMH"" omen teleport. I am disappointed in you. WHY DO I SOUND LIKE THAT SQUIZZ BLOKE?' ON GOLLY ITS TIME TO PLAY OMEN CLOVE AND VIPER PLEAAAAAAAASE ANYTHING BUT ""WORLD DIVIDED"" you don't need to ult for a smoke";
+
+            await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
+        }
+
+        [Command("yap")]
+
+        //sends a document of best players to watch for each agent
+        public async Task yappanese(CommandContext ctx)
+        {
+            string response = @"https://cdn.discordapp.com/attachments/1320708926827790339/1353130074890829895/Untitled_video_-_Made_with_Clipchamp_8.mp4?ex=67e08815&is=67df3695&hm=15ad97c3fe97f4be83b1a575c1abb420c122e7016661fdfa431447d3606415fa&";
 
             await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
         }
