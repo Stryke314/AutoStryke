@@ -244,17 +244,17 @@ namespace AutoStryke.slash
 
         [SlashCommand("setaura", "Set a user's aura points to a specific value.")]
         public async Task SetAura(InteractionContext ctx,
-    [Option("user", "The user whose aura points you want to set")] DiscordUser user,
-    [Option("points", "The number of aura points to set")] long points)  // Slash commands require long, not int
+        [Option("user", "The user whose aura points you want to set")] DiscordUser user,
+        [Option("points", "The number of aura points to set")] long points)  // Slash commands require long, not int
         {
             await ctx.DeferAsync(); // Defer response to prevent timeouts
 
             List<ulong> allowedUserIds = new List<ulong>
-        {
-            889088075395923998, // Stryke
-            791982380801327115, // Squirr0l
+            {
+                889088075395923998, // Stryke
+                791982380801327115, // Squirr0l
             
-        };
+            };
 
 
             if (!allowedUserIds.Contains(ctx.User.Id))
@@ -301,11 +301,17 @@ namespace AutoStryke.slash
         {
             await ctx.DeferAsync(); // Defer response to prevent timeouts
 
-            ulong allowedUserId = 889088075395923998; // Replace with the Discord ID of the allowed person
-
-            if (ctx.User.Id != allowedUserId)
+            List<ulong> allowedUserIds = new List<ulong>
             {
-                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("You do not have permission to use this command."));
+                889088075395923998, // Stryke
+                791982380801327115, // Squirr0l
+            
+            };
+
+
+            if (!allowedUserIds.Contains(ctx.User.Id))
+            {
+                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("You are not allowed to use this command."));
                 return;
             }
 
