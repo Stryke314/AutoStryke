@@ -249,11 +249,17 @@ namespace AutoStryke.slash
         {
             await ctx.DeferAsync(); // Defer response to prevent timeouts
 
-            ulong allowedUserId = 889088075395923998; // Replace with the Discord ID of the allowed person
+            List<ulong> allowedUserIds = new List<ulong>
+        {
+            889088075395923998, // Stryke
+            791982380801327115, // Squirr0l
+            
+        };
 
-            if (ctx.User.Id != allowedUserId)
+
+            if (!allowedUserIds.Contains(ctx.User.Id))
             {
-                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("You do not have permission to use this command."));
+                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("You are not allowed to use this command."));
                 return;
             }
 
