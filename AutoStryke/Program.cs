@@ -8,6 +8,7 @@ using System;
 using System.IO;
 using System.Collections.Generic;
 using AutoStryke.slash;
+using DSharpPlus.Entities;
 
 
 
@@ -48,6 +49,26 @@ namespace AutoStrykeNew
                 EnableMentionPrefix = true,
                 EnableDefaultHelp = true,
 
+            };
+
+
+            client.MessageCreated += async (s, e) =>
+            {
+                if (e.Author.IsBot) return;
+
+                if (e.Author.Id == 791982380801327115) 
+                {
+                    var emoji = e.Guild.Emojis.Values.FirstOrDefault(x => x.Name == "benerd");
+
+                    if (emoji != null)
+                    {
+                        await e.Message.CreateReactionAsync(emoji);
+                    }
+                    else
+                    {
+                        Console.WriteLine("Emoji not found!");
+                    }
+                }
             };
 
 
