@@ -416,7 +416,7 @@ namespace AutoStryke.slash
             {
                 "scrim" => "📝 Scrim Scheduled",
                 "match" => "⚔️ Match Scheduled",
-                "vod review" => "🎥 VOD Review Scheduled",
+                "vodreview" => "🎥 VOD Review Scheduled",
                 _ => "❓ Unknown Type Scheduled"  // This is a fallback in case of an unrecognized input
             };
 
@@ -521,7 +521,7 @@ namespace AutoStryke.slash
                 {
                     "scrim" => "📝",               // Emoji for scrim
                     "match" => "⚔️",              // Emoji for match
-                    "vod review" => "🎥",         // Emoji for VOD review
+                    "vodreview" => "🎥",         // Emoji for VOD review
                     _ => "❓"                      // Default fallback emoji for unknown types
                 };
 
@@ -572,7 +572,7 @@ namespace AutoStryke.slash
                 {
                     "scrim" => "📝",               // Emoji for scrim
                     "match" => "⚔️",              // Emoji for match
-                    "vod review" => "🎥",         // Emoji for VOD review
+                    "vodreview" => "🎥",         // Emoji for VOD review
                     _ => "❓"                      // Default fallback emoji for unknown types
                 };
                 embed.AddField($"#{i + 1}: {emoji} {s.EnemyTeam} on {s.Map}", $"<t:{s.Timecode}>", false);
