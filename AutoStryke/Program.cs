@@ -22,6 +22,14 @@ namespace AutoStrykeNew
         public static Dictionary<ulong, Dictionary<ulong, int>> AuraPoints = new Dictionary<ulong, Dictionary<ulong, int>>();
         private static DiscordClient client { get; set; }
         private static CommandsNextExtension commands { get; set; }
+
+        public class ValorantComp
+        {
+            public string Map { get; set; } = "";
+            public List<string> Agents { get; set; } = new List<string>();
+        }
+
+
         static async Task Main(string[] args)
         {
             LoadAuraPoints();
@@ -144,6 +152,27 @@ namespace AutoStrykeNew
                 Console.WriteLine($"[ERROR] Failed to load aura points: {ex.Message}");
                 Program.AuraPoints = new Dictionary<ulong, Dictionary<ulong, int>>(); // Ensure bot doesn't crash
             }
+        }
+
+        // File path for comps (you can change the name/location if needed)
+        private const string compsFilePath = "comps.json";
+
+        // Save comps to JSON file
+        public static void SaveComps(Dictionary<string, ValorantComp> comps)
+        {
+            var json = JsonConvert.SerializeObject(comps, Formatting.Indented);
+            File.WriteAllText(compsFilePath, json);
+        }
+
+        // Load comps from JSON file
+        public static Dictionary<string, ValorantComp> LoadComps()
+        {
+            if (!File.Exists(compsFilePath))
+                return new Dictionary<string, ValorantComp>();
+
+            var json = File.ReadAllText(compsFilePath);
+            return JsonConvert.DeserializeObject<Dictionary<string, ValorantComp>>(json)
+                   ?? new Dictionary<string, ValorantComp>();
         }
 
 

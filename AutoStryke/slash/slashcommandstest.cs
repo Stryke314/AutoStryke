@@ -20,6 +20,21 @@ namespace AutoStryke.slash
     public class slashcommandstest : ApplicationCommandModule
     {
 
+        public enum ValorantMap
+        {
+            [ChoiceName("Ascent")] Ascent,
+            [ChoiceName("Haven")] Haven,
+            [ChoiceName("Split")] Split,
+            [ChoiceName("Bind")] Bind,
+            [ChoiceName("Icebox")] Icebox,
+            [ChoiceName("Pearl")] Pearl,
+            [ChoiceName("Fracture")] Fracture,
+            [ChoiceName("Sunset")] Sunset,
+            [ChoiceName("Abyss")] Abyss,
+            [ChoiceName("Lotus")] Lotus,
+            [ChoiceName("Breeze")] Breeze
+        }
+
         //---------------------------------------------------------------------AURA COMMANDS---------------------------------------------------------------------//
 
 
@@ -376,15 +391,15 @@ namespace AutoStryke.slash
 
         [SlashCommand("Creatematch", "Schedule a scrim or match")]
         public async Task ScrimsCommand(InteractionContext ctx,
-    [Option("type", "Is this a Scrim or Match?")]
-        [Choice("Scrim", "scrim")]
-        [Choice("Match", "match")]
-        [Choice("VODreview", "vodreview")]
-        string matchType,
-    [Option("timecode", "Unix timestamp for the scrim in <t:1745914353> format")] string timecode,
-    [Option("map", "Map to be played")] string map,
-    [Option("enemy_team", "Name of the enemy team")] string enemyTeam,
-    [Option("Apollolink", "Link to the apollo post")] string? apolloLink = null)  // Make apolloLink optional
+            [Option("type", "Is this a Scrim or Match?")]
+                [Choice("Scrim", "scrim")]
+                [Choice("Match", "match")]
+                [Choice("VODreview", "vodreview")]
+                string matchType,
+            [Option("timecode", "Unix timestamp for the scrim in <t:1745914353> format")] string timecode,
+            [Option("map", "Map to be played")] string map,
+            [Option("enemy_team", "Name of the enemy team")] string enemyTeam,
+            [Option("Apollolink", "Link to the apollo post")] string? apolloLink = null)  // Make apolloLink optional
         {
             if (ctx.User.Id != StrykeID)
             {
@@ -612,7 +627,7 @@ namespace AutoStryke.slash
             var interactivity = ctx.Client.GetInteractivity();
             var response = await interactivity.WaitForMessageAsync(
                 x => x.Author.Id == ctx.User.Id &&
-                     x.ChannelId == ctx.Channel.Id, TimeSpan.FromSeconds(30));
+                     x.ChannelId == ctx.Channel.Id, TimeSpan.FromSeconds(120));
 
             if (!response.TimedOut)
             {
@@ -656,6 +671,178 @@ namespace AutoStryke.slash
                         .AsEphemeral(true));
             }
         }
+
+        [SlashCommand("createcomp", "Create a comp for a specific map. This will overwrite the existing comp.")]
+        public async Task CreateCompCommand(InteractionContext ctx,
+            [Option("map", "Select a Valorant map")] ValorantMap map,
+            [Option("agent1", "First agent")] string agent1,
+            [Option("agent2", "Second agent")] string agent2,
+            [Option("agent3", "Third agent")] string agent3,
+            [Option("agent4", "Fourth agent")] string agent4,
+            [Option("agent5", "Fifth agent")] string agent5)
+        {
+            var comps = Program.LoadComps();
+
+            var agentNames = new[] { agent1, agent2, agent3, agent4, agent5 };
+            var formattedAgents = new List<string>();
+
+            foreach (var name in agentNames)
+            {
+                var emojiName = name.ToLower();
+                var emoji = ctx.Guild.Emojis.Values.FirstOrDefault(e => e.Name.ToLower() == emojiName);
+
+                if (emoji != null)
+                {
+                    formattedAgents.Add(emoji.ToString()); // Proper format like <:viper:1234567890>
+                }
+                else
+                {
+                    formattedAgents.Add(name); // fallback to plain text
+                }
+            }
+
+            var newComp = new Program.ValorantComp
+            {
+                Map = map.ToString().ToLower(), // map enum as string
+                Agents = formattedAgents
+            };
+
+            comps[map.ToString().ToLower()] = newComp;
+            Program.SaveComps(comps);
+
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder().WithContent($"✅ Comp for **{map}** saved:\n{string.Join(" ", formattedAgents)}"));
+        }
+
+
+
+        [SlashCommand("comps", "View all saved comps.")]
+        public async Task ViewAllCompsCommand(InteractionContext ctx)
+        {
+            var comps = Program.LoadComps();
+
+            if (comps.Count == 0)
+            {
+                await ctx.CreateResponseAsync("❌ No comps saved yet.");
+                return;
+            }
+
+            var embed = new DiscordEmbedBuilder()
+                .WithTitle("📋 All Saved Comps")
+                .WithColor(DiscordColor.Azure);
+
+            foreach (var kvp in comps)
+            {
+                var mapName = char.ToUpper(kvp.Key[0]) + kvp.Key[1..]; // Capitalize map name
+                var agents = string.Join(" ", kvp.Value.Agents);
+                embed.AddField($"__{mapName}__", agents, false);
+            }
+
+            embed.WithFooter("Use /createcomp or a map-specific command to update comps.");
+
+            await ctx.CreateResponseAsync(embed);
+        }
+
+
+
+        private async Task ViewMapComp(InteractionContext ctx, string key, string displayName)
+        {
+            var comps = Program.LoadComps();
+
+            if (comps.TryGetValue(key, out var comp))
+            {
+                // Attempt to resolve each agent string into a server emoji
+                var emojiList = new List<string>();
+
+                foreach (var agent in comp.Agents)
+                {
+                    var emojiName = agent.Trim(':'); // from ":viper:" -> "viper"
+                    var emoji = ctx.Guild.Emojis.Values.FirstOrDefault(e => e.Name.ToLower() == emojiName);
+
+                    emojiList.Add(emoji?.ToString() ?? agent); // fallback to raw text if not found
+                }
+
+                await ctx.CreateResponseAsync(
+                    InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent($"**{displayName} Comp:**\n{string.Join(" ", emojiList)}"));
+            }
+            else
+            {
+                await ctx.CreateResponseAsync(
+                    InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent($"❌ No comp saved for {displayName}."));
+            }
+        }
+
+
+        [SlashCommand("ascent", "View the comp for Ascent")]
+        public async Task ViewAscentComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "ascent", "Ascent");
+        }
+
+        [SlashCommand("haven", "View the comp for Haven")]
+        public async Task ViewHavenComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "haven", "Haven");
+        }
+
+        [SlashCommand("split", "View the comp for Split")]
+        public async Task ViewSplitComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "split", "Split");
+        }
+
+        [SlashCommand("bind", "View the comp for Bind")]
+        public async Task ViewBindComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "bind", "Bind");
+        }
+
+        [SlashCommand("icebox", "View the comp for Icebox")]
+        public async Task ViewIceboxComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "icebox", "Icebox");
+        }
+
+        [SlashCommand("pearl", "View the comp for Pearl")]
+        public async Task ViewPearlComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "pearl", "Pearl");
+        }
+
+        [SlashCommand("fracture", "View the comp for Fracture")]
+        public async Task ViewFractureComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "fracture", "Fracture");
+        }
+
+        [SlashCommand("sunset", "View the comp for Sunset")]
+        public async Task ViewSunsetComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "sunset", "Sunset");
+        }
+
+        [SlashCommand("abyss", "View the comp for Abyss")]
+        public async Task ViewAbyssComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "abyss", "Abyss");
+        }
+
+        [SlashCommand("lotus", "View the comp for Lotus")]
+        public async Task ViewLotusComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "lotus", "Lotus");
+        }
+
+        [SlashCommand("breeze", "View the comp for Breeze")]
+        public async Task ViewBreezeComp(InteractionContext ctx)
+        {
+            await ViewMapComp(ctx, "breeze", "Breeze");
+        }
+
 
 
 
