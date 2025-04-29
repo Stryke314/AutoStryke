@@ -375,18 +375,16 @@ namespace AutoStryke.slash
         private static string jsonFilePath = "scrims.json"; // Path to  JSON file
 
         [SlashCommand("Creatematch", "Schedule a scrim or match")]
-
         public async Task ScrimsCommand(InteractionContext ctx,
-            [Option("type", "Is this a Scrim or Match?")]
-                [Choice("Scrim", "scrim")]
-                [Choice("Match", "match")]
-                [Choice ("VODreview", "vodreview")]
-                string matchType,
-            [Option("timecode", "Unix timestamp for the scrim in <t:1745914353> format")] string timecode,
-            [Option("map", "Map to be played")] string map,
-            [Option("enemy_team", "Name of the enemy team")] string enemyTeam,
-            [Option("Apollolink", "Link to the apollo post")] string apolloLink)
-
+    [Option("type", "Is this a Scrim or Match?")]
+        [Choice("Scrim", "scrim")]
+        [Choice("Match", "match")]
+        [Choice("VODreview", "vodreview")]
+        string matchType,
+    [Option("timecode", "Unix timestamp for the scrim in <t:1745914353> format")] string timecode,
+    [Option("map", "Map to be played")] string map,
+    [Option("enemy_team", "Name of the enemy team")] string enemyTeam,
+    [Option("Apollolink", "Link to the apollo post")] string? apolloLink = null)  // Make apolloLink optional
         {
             if (ctx.User.Id != StrykeID)
             {
@@ -420,24 +418,34 @@ namespace AutoStryke.slash
                 _ => "❓ Unknown Type Scheduled"  // This is a fallback in case of an unrecognized input
             };
 
+            // Build the embed
             var embed = new DiscordEmbedBuilder
             {
                 Title = titlePrefix,
                 Color = DiscordColor.Cyan,
-                Description = $"**Date & Time:** <t:{timestamp}>\n**Map:** {map}\n**Enemy Team:** {enemyTeam}\n**Sign Up Here:** {apolloLink}"
-                
+                Description = $"**Date & Time:** <t:{timestamp}> (<t:{timestamp}:R>)\n" +
+                              $"**Map:** {map}\n" +
+                              $"**Enemy Team:** {enemyTeam}"
             };
 
+            // Add Apollo link if it's provided
+            if (!string.IsNullOrWhiteSpace(apolloLink))
+            {
+                embed.Description += $"\n**Sign Up Here:** [Apollo Link]({apolloLink})";
+            }
+
+            // Send the embed response
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder().AddEmbed(embed));
 
-            // Create the scrim data object with MatchType
+            // Create the scrim data object with MatchType and Apollo link
             var scrimData = new ScrimData
             {
                 Timecode = timestamp,
                 Map = map,
                 EnemyTeam = enemyTeam,
-                MatchType = matchType // Add MatchType here
+                MatchType = matchType,
+                apolloLink = apolloLink  // This will be null if not provided
             };
 
             // Load existing scrims from the JSON file
@@ -456,6 +464,7 @@ namespace AutoStryke.slash
             public string Map { get; set; }
             public string EnemyTeam { get; set; }
             public string MatchType { get; set; } // Add MatchType property
+            public string? apolloLink { get; set; } // Apollo link property, nullable
         }
 
         public void SaveScrims(List<ScrimData> scrims)
@@ -485,7 +494,7 @@ namespace AutoStryke.slash
 
 
 
-        [SlashCommand("matches", "View the next 5 upcoming scrims")]
+        [SlashCommand("matches", "View the next 5 upcoming scrims and matches")]
         public async Task ViewScrimsCommand(InteractionContext ctx)
         {
             var scrims = LoadScrims();
@@ -514,19 +523,35 @@ namespace AutoStryke.slash
                 Color = DiscordColor.Azure
             };
 
-            foreach (var scrim in upcoming)
+            foreach (var scrim in upcoming.Select((value, index) => new { value, index })) // Use Select to get both value and index
             {
-                // Determine if it's a scrim or match based on the match type (you may have that property)
-                string emoji = scrim.MatchType.ToLower() switch
+                // Determine if it's a scrim or match based on the match type
+                string emoji = scrim.value.MatchType.ToLower() switch
                 {
-                    "scrim" => "📝",               // Emoji for scrim
-                    "match" => "⚔️",              // Emoji for match
-                    "vodreview" => "🎥",         // Emoji for VOD review
-                    _ => "❓"                      // Default fallback emoji for unknown types
+                    "scrim" => "📝",
+                    "match" => "⚔️",
+                    "vodreview" => "🎥",
+                    _ => "❓"
                 };
 
-                // Add the entry with the appropriate emoji
-                embed.AddField($"{emoji} {scrim.EnemyTeam} on {scrim.Map}", $"<t:{scrim.Timecode}>", inline: false);
+                string fieldTitle = $"{emoji} {scrim.value.EnemyTeam} on {scrim.value.Map}";
+
+                string fieldContent = $"**Date & Time:** <t:{scrim.value.Timecode}> (<t:{scrim.value.Timecode}:R>)\n" +
+                                      $"**Map:** {scrim.value.Map}\n" +
+                                      $"**Enemy Team:** {scrim.value.EnemyTeam}";
+
+                if (!string.IsNullOrWhiteSpace(scrim.value.apolloLink))
+                {
+                    fieldContent += $"\n**Sign Up Here:** [Apollo Link]({scrim.value.apolloLink})";
+                }
+
+                embed.AddField(fieldTitle, fieldContent, inline: false);
+
+                // Add a blank field to create a gap, but only if this isn't the last entry
+                if (scrim.index < upcoming.Count() - 1)
+                {
+                    embed.AddField("\u200B", "\u200B", inline: false); // Zero-width space for a blank field
+                }
             }
 
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
