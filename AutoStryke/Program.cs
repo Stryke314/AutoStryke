@@ -9,6 +9,8 @@ using System.IO;
 using System.Collections.Generic;
 using AutoStryke.slash;
 using DSharpPlus.Entities;
+using DSharpPlus.Interactivity.Extensions;
+
 
 
 
@@ -40,6 +42,11 @@ namespace AutoStrykeNew
 
             client = new DiscordClient(discordconfig);
 
+            client.UseInteractivity(new DSharpPlus.Interactivity.InteractivityConfiguration
+            {
+                Timeout = TimeSpan.FromMinutes(2)
+            });
+
             client.Ready += Client_Ready;
 
             var commandsconfig = new CommandsNextConfiguration()
@@ -52,11 +59,12 @@ namespace AutoStrykeNew
             };
 
 
+            //------------------------------------------------------------------------------------------REACTS----------------------------------------------------------------------------------------------------//
             client.MessageCreated += async (s, e) =>
             {
                 if (e.Author.IsBot) return;
 
-                if (e.Author.Id == 791982380801327115) 
+                if (e.Author.Id == 791982380801327115)
                 {
                     var emoji = e.Guild.Emojis.Values.FirstOrDefault(x => x.Name == "benerd");
 
@@ -71,16 +79,17 @@ namespace AutoStrykeNew
                 }
             };
 
-
+            //_------------------------------------------------------------------------------------------SETUP----------------------------------------------------------------------------------------------------//
             commands = client.UseCommandsNext(commandsconfig);
 
             // Register the slash commands properly
             var slashcommandsconfig = client.UseSlashCommands();
-            slashcommandsconfig.RegisterCommands<slashcommandstest>(); 
+            slashcommandsconfig.RegisterCommands<slashcommandstest>();
 
             // Register normal commands
             commands.RegisterCommands<Commands.Commands>();
-            //commands.RegisterCommands<Commands.AuraCommands>();
+            
+
             await client.ConnectAsync();
             await Task.Delay(-1);
         }
@@ -91,6 +100,9 @@ namespace AutoStrykeNew
             Console.WriteLine("Bot is ready");
             return Task.CompletedTask;
         }
+
+
+        //----------------------------------------------------------------------------------------------------AURA POINTS----------------------------------------------------------------------------------------------------//
 
         public static void SaveAuraPoints()
         {
@@ -133,6 +145,7 @@ namespace AutoStrykeNew
                 Program.AuraPoints = new Dictionary<ulong, Dictionary<ulong, int>>(); // Ensure bot doesn't crash
             }
         }
+
 
     }
 }
