@@ -12,23 +12,19 @@ using DSharpPlus.Entities;
 using DSharpPlus.Interactivity.Extensions;
 
 
-
-
 namespace AutoStrykeNew
 {
     internal class Program
     {
-        // storage for aura points (key: user ID, value: points)
-        public static Dictionary<ulong, Dictionary<ulong, int>> AuraPoints = new Dictionary<ulong, Dictionary<ulong, int>>();
-        private static DiscordClient client { get; set; }
-        private static CommandsNextExtension commands { get; set; }
+        public static Dictionary<ulong, Dictionary<ulong, int>> AuraPoints = new();
+        private static DiscordClient client;
+        private static CommandsNextExtension commands;
 
         public class ValorantComp
         {
             public string Map { get; set; } = "";
-            public List<string> Agents { get; set; } = new List<string>();
+            public List<string> Agents { get; set; } = new();
         }
-
 
         static async Task Main(string[] args)
         {
@@ -37,15 +33,12 @@ namespace AutoStrykeNew
             var jsonreader = new jsonreader();
             await jsonreader.ReadJSON();
 
-
-
             var discordconfig = new DiscordConfiguration()
             {
                 Intents = DiscordIntents.All,
                 Token = jsonreader.token,
                 TokenType = TokenType.Bot,
                 AutoReconnect = true,
-
             };
 
             client = new DiscordClient(discordconfig);
@@ -63,11 +56,8 @@ namespace AutoStrykeNew
                 EnableDms = true,
                 EnableMentionPrefix = true,
                 EnableDefaultHelp = true,
-
             };
 
-
-            //------------------------------------------------------------------------------------------REACTS----------------------------------------------------------------------------------------------------//
             client.MessageCreated += async (s, e) =>
             {
                 if (e.Author.IsBot) return;
@@ -75,28 +65,51 @@ namespace AutoStrykeNew
                 if (e.Author.Id == 791982380801327115)
                 {
                     var emoji = e.Guild.Emojis.Values.FirstOrDefault(x => x.Name == "benerd");
-
                     if (emoji != null)
-                    {
                         await e.Message.CreateReactionAsync(emoji);
-                    }
                     else
-                    {
                         Console.WriteLine("Emoji not found!");
-                    }
                 }
             };
 
-            //_------------------------------------------------------------------------------------------SETUP----------------------------------------------------------------------------------------------------//
+            _ = Task.Run(async () =>
+            {
+                while (true)
+                {
+                    await CheckForResultPrompts();
+                    await Task.Delay(TimeSpan.FromMinutes(5));
+                }
+            });
+
+            client.ComponentInteractionCreated += async (s, e) =>
+            {
+                if (e.Interaction.Data.CustomId.StartsWith("submit_result_"))
+                {
+                    var parts = e.Interaction.Data.CustomId.Split('_');
+                    if (parts.Length < 5) return;
+
+                    string opponent = parts[2];
+                    string map = parts[3];
+                    string dateStr = parts[4];
+
+                    var modal = new DiscordInteractionResponseBuilder()
+                        .WithTitle($"Result vs {opponent}")
+                        .WithCustomId($"modal_result_{opponent}_{map}_{dateStr}")
+                        .AddComponents(
+                            new TextInputComponent("Our Score", "our_score", required: true, placeholder: "e.g. 13", style: TextInputStyle.Short),
+                            new TextInputComponent("Their Score", "their_score", required: true, placeholder: "e.g. 7", style: TextInputStyle.Short)
+                        );
+
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
+                }
+            };
+
             commands = client.UseCommandsNext(commandsconfig);
 
-            // Register the slash commands properly
             var slashcommandsconfig = client.UseSlashCommands();
             slashcommandsconfig.RegisterCommands<slashcommandstest>();
 
-            // Register normal commands
             commands.RegisterCommands<Commands.Commands>();
-            
 
             await client.ConnectAsync();
             await Task.Delay(-1);
@@ -104,21 +117,17 @@ namespace AutoStrykeNew
 
         private static Task Client_Ready(DiscordClient sender, ReadyEventArgs args)
         {
-
             Console.WriteLine("Bot is ready");
             return Task.CompletedTask;
         }
-
-
-        //----------------------------------------------------------------------------------------------------AURA POINTS----------------------------------------------------------------------------------------------------//
 
         public static void SaveAuraPoints()
         {
             try
             {
-                var json = JsonConvert.SerializeObject(Program.AuraPoints, Formatting.Indented);
+                var json = JsonConvert.SerializeObject(AuraPoints, Formatting.Indented);
                 File.WriteAllText("auraPoints.json", json);
-                Console.WriteLine("[DEBUG] Aura points successfully saved.");
+                Console.WriteLine("[DEBUG] Aura points saved.");
             }
             catch (Exception ex)
             {
@@ -133,48 +142,101 @@ namespace AutoStrykeNew
                 if (File.Exists("auraPoints.json"))
                 {
                     var json = File.ReadAllText("auraPoints.json");
-                    Program.AuraPoints = JsonConvert.DeserializeObject<Dictionary<ulong, Dictionary<ulong, int>>>(json);
-
-                    // Ensure it's not null (in case of a corrupted file)
-                    if (Program.AuraPoints == null)
-                        Program.AuraPoints = new Dictionary<ulong, Dictionary<ulong, int>>();
-
-                    Console.WriteLine("[DEBUG] Aura points successfully loaded.");
-                }
-                else
-                {
-                    Program.AuraPoints = new Dictionary<ulong, Dictionary<ulong, int>>(); // Initialize empty dictionary
-                    Console.WriteLine("[DEBUG] No aura points file found. Starting fresh.");
+                    AuraPoints = JsonConvert.DeserializeObject<Dictionary<ulong, Dictionary<ulong, int>>>(json)
+                                 ?? new();
+                    Console.WriteLine("[DEBUG] Aura points loaded.");
                 }
             }
             catch (Exception ex)
             {
                 Console.WriteLine($"[ERROR] Failed to load aura points: {ex.Message}");
-                Program.AuraPoints = new Dictionary<ulong, Dictionary<ulong, int>>(); // Ensure bot doesn't crash
+                AuraPoints = new();
             }
         }
 
-        // File path for comps (you can change the name/location if needed)
         private const string compsFilePath = "comps.json";
 
-        // Save comps to JSON file
         public static void SaveComps(Dictionary<string, ValorantComp> comps)
         {
             var json = JsonConvert.SerializeObject(comps, Formatting.Indented);
             File.WriteAllText(compsFilePath, json);
         }
 
-        // Load comps from JSON file
         public static Dictionary<string, ValorantComp> LoadComps()
         {
             if (!File.Exists(compsFilePath))
-                return new Dictionary<string, ValorantComp>();
+                return new();
 
             var json = File.ReadAllText(compsFilePath);
-            return JsonConvert.DeserializeObject<Dictionary<string, ValorantComp>>(json)
-                   ?? new Dictionary<string, ValorantComp>();
+            return JsonConvert.DeserializeObject<Dictionary<string, ValorantComp>>(json) ?? new();
         }
 
+        public class MatchResult
+        {
+            public string Opponent { get; set; }
+            public string Map { get; set; }
+            public int OurScore { get; set; }
+            public int TheirScore { get; set; }
+            public DateTime Date { get; set; }
+        }
 
+        private const string matchResultsFilePath = "matchResults.json";
+
+        public static void SaveMatchResults(List<MatchResult> results)
+        {
+            var json = JsonConvert.SerializeObject(results, Formatting.Indented);
+            File.WriteAllText(matchResultsFilePath, json);
+        }
+
+        public static List<MatchResult> LoadMatchResults()
+        {
+            if (!File.Exists(matchResultsFilePath))
+                return new();
+
+            var json = File.ReadAllText(matchResultsFilePath);
+            return JsonConvert.DeserializeObject<List<MatchResult>>(json) ?? new();
+        }
+
+        public class ScheduleEntry
+        {
+            public string Opponent { get; set; }
+            public string Map { get; set; }
+            public DateTime Date { get; set; }
+            public ulong ChannelId { get; set; }
+        }
+
+        private const string scheduleFilePath = "schedule.json";
+
+        public static List<ScheduleEntry> LoadSchedule()
+        {
+            if (!File.Exists(scheduleFilePath))
+                return new();
+
+            var json = File.ReadAllText(scheduleFilePath);
+            return JsonConvert.DeserializeObject<List<ScheduleEntry>>(json) ?? new();
+        }
+
+        public static async Task CheckForResultPrompts()
+        {
+            var schedules = LoadSchedule();
+            var results = LoadMatchResults();
+
+            foreach (var match in schedules)
+            {
+                bool alreadySubmitted = results.Any(r => r.Date.Date == match.Date.Date && r.Opponent == match.Opponent);
+                if (alreadySubmitted) continue;
+
+                var matchEndTime = match.Date.AddHours(1);
+                if (DateTime.UtcNow >= matchEndTime && DateTime.UtcNow <= matchEndTime.AddMinutes(5))
+                {
+                    var channel = await client.GetChannelAsync(match.ChannelId);
+                    await channel.SendMessageAsync("📝 It's time to submit the match result:");
+
+                    await channel.SendMessageAsync(new DiscordMessageBuilder()
+                        .WithContent("Click the button to submit the result")
+                        .AddComponents(new DiscordButtonComponent(ButtonStyle.Primary, $"submit_result_{match.Opponent}_{match.Map}_{match.Date:yyyyMMdd}", "Submit Result")));
+                }
+            }
+        }
     }
 }

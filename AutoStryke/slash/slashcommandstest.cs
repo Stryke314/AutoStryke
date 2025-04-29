@@ -843,6 +843,36 @@ namespace AutoStryke.slash
             await ViewMapComp(ctx, "breeze", "Breeze");
         }
 
+        [SlashCommand("matchresults", "View previous match results.")]
+        public async Task MatchResults(InteractionContext ctx)
+        {
+            await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+
+            var results = Program.LoadMatchResults();
+
+            if (results == null || results.Count == 0)
+            {
+                await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("❌ No match results have been submitted yet."));
+                return;
+            }
+
+            // Sort by most recent and show up to 5
+            var latestResults = results.OrderByDescending(r => r.Date).Take(5);
+
+            var embed = new DiscordEmbedBuilder()
+                .WithTitle("📊 Recent Match Results")
+                .WithColor(DiscordColor.Blurple);
+
+            foreach (var result in latestResults)
+            {
+                string outcome = result.OurScore > result.TheirScore ? "✅ Win" :
+                                 result.OurScore < result.TheirScore ? "❌ Loss" : "➖ Draw";
+
+                embed.AddField($"{result.Map} vs {result.Opponent} — {outcome}", $"{result.OurScore} - {result.TheirScore} on {result.Date:dd MMM yyyy}", inline: false);
+            }
+
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed));
+        }
 
 
 
