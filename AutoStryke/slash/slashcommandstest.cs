@@ -380,6 +380,7 @@ namespace AutoStryke.slash
             [Option("type", "Is this a Scrim or Match?")]
                 [Choice("Scrim", "scrim")]
                 [Choice("Match", "match")]
+                [Choice ("VODreview", "vodreview")]
                 string matchType,
             [Option("timecode", "Unix timestamp for the scrim in <t:1745914353> format")] string timecode,
             [Option("map", "Map to be played")] string map,
@@ -411,7 +412,13 @@ namespace AutoStryke.slash
             DateTime scrimDate = DateTimeOffset.FromUnixTimeSeconds(timestamp).DateTime;
 
             // Set the title prefix and emoji based on the match type
-            string titlePrefix = matchType.ToLower() == "scrim" ? "📝 Scrim Scheduled" : "⚔️ Match Scheduled";
+            string titlePrefix = matchType.ToLower() switch
+            {
+                "scrim" => "📝 Scrim Scheduled",
+                "match" => "⚔️ Match Scheduled",
+                "vod review" => "🎥 VOD Review Scheduled",
+                _ => "❓ Unknown Type Scheduled"  // This is a fallback in case of an unrecognized input
+            };
 
             var embed = new DiscordEmbedBuilder
             {
@@ -510,7 +517,13 @@ namespace AutoStryke.slash
             foreach (var scrim in upcoming)
             {
                 // Determine if it's a scrim or match based on the match type (you may have that property)
-                string emoji = scrim.MatchType.ToLower() == "scrim" ? "📝" : "⚔️";
+                string emoji = scrim.MatchType.ToLower() switch
+                {
+                    "scrim" => "📝",               // Emoji for scrim
+                    "match" => "⚔️",              // Emoji for match
+                    "vod review" => "🎥",         // Emoji for VOD review
+                    _ => "❓"                      // Default fallback emoji for unknown types
+                };
 
                 // Add the entry with the appropriate emoji
                 embed.AddField($"{emoji} {scrim.EnemyTeam} on {scrim.Map}", $"<t:{scrim.Timecode}>", inline: false);
@@ -555,7 +568,13 @@ namespace AutoStryke.slash
             for (int i = 0; i < scrims.Count; i++)
             {
                 var s = scrims[i];
-                string emoji = s.MatchType.ToLower() == "scrim" ? "📝" : "⚔️";  // Emoji for scrim or match
+                string emoji = s.MatchType.ToLower() switch
+                {
+                    "scrim" => "📝",               // Emoji for scrim
+                    "match" => "⚔️",              // Emoji for match
+                    "vod review" => "🎥",         // Emoji for VOD review
+                    _ => "❓"                      // Default fallback emoji for unknown types
+                };
                 embed.AddField($"#{i + 1}: {emoji} {s.EnemyTeam} on {s.Map}", $"<t:{s.Timecode}>", false);
             }
 
