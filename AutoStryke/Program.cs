@@ -104,15 +104,18 @@ namespace AutoStrykeNew
                 }
             };
 
-            commands = client.UseCommandsNext(commandsconfig);
-
-            var slashcommandsconfig = client.UseSlashCommands();
-            slashcommandsconfig.RegisterCommands<slashcommandstest>();
-
+            // CommandsNext (prefix commands)
+            var commands = client.UseCommandsNext(commandsconfig);
             commands.RegisterCommands<Commands.Commands>();
+
+            // Slash commands
+            var slash = client.UseSlashCommands();
+            slash.RegisterCommands<slashcommandstest>();
+            slash.RegisterCommands<CompsCommands>();
 
             await client.ConnectAsync();
             await Task.Delay(-1);
+
         }
 
         private static Task Client_Ready(DiscordClient sender, ReadyEventArgs args)
