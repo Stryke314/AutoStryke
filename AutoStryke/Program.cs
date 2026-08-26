@@ -112,6 +112,7 @@ namespace AutoStrykeNew
             var slash = client.UseSlashCommands();
             slash.RegisterCommands<slashcommandstest>();
             slash.RegisterCommands<CompsCommands>();
+            slash.RegisterCommands<ProCompCommands>();
 
             await client.ConnectAsync();
             await Task.Delay(-1);

@@ -15,7 +15,19 @@ namespace AutoStrykeNew.config
 
         public async Task ReadJSON()
         {
-            using (StreamReader sr = new StreamReader("config.json"))
+            var configPaths = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "config.json"),
+                Path.Combine(Directory.GetCurrentDirectory(), "config.json"),
+                Path.Combine(AppContext.BaseDirectory, "config", "config.json"),
+                Path.Combine(Directory.GetCurrentDirectory(), "config", "config.json"),
+            };
+
+            var configPath = configPaths.FirstOrDefault(File.Exists)
+                ?? throw new FileNotFoundException(
+                    "Could not find config.json. Put it beside the bot executable or in a config folder.");
+
+            using (StreamReader sr = new StreamReader(configPath))
             {
                 string json = await sr.ReadToEndAsync();
                 JSONstructure data = JsonConvert.DeserializeObject<JSONstructure>(json);
