@@ -249,7 +249,7 @@ public class ProCompCommands : ApplicationCommandModule
                 c.Team,
                 c.Comp,
                 c.Link,
-                Similarity = CompSimilarity.Compute(queryAgents, c.Comp.Split(" / ", StringSplitOptions.None))
+                Similarity = CompSimilarity.Compute(queryAgents,c.Comp.Split(new[] { " / " }, StringSplitOptions.None))
             })
             .Where(c => c.Similarity >= SimilarityThreshold)
             .OrderByDescending(c => c.Similarity)
