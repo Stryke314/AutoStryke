@@ -158,6 +158,56 @@ namespace AutoStrykeNew
                 await e.Interaction.EditOriginalResponseAsync(
                     new DiscordWebhookBuilder().AddEmbed(embed));
             };
+
+            // Handles the "Save to team" button under /findprocomp results by
+            // opening a modal asking which team to save the searched comp under.
+            discordClient.ComponentInteractionCreated += async (s, e) =>
+            {
+                if (!e.Interaction.Data.CustomId.StartsWith("findprocomp_save|"))
+                    return;
+
+                var payload = e.Interaction.Data.CustomId.Substring("findprocomp_save|".Length);
+
+                var modal = new DiscordInteractionResponseBuilder()
+                    .WithTitle("Save this comp to a team")
+                    .WithCustomId($"modal_save_comp|{payload}")
+                    .AddComponents(new TextInputComponent(
+                        "Team name", "team_name", required: true, placeholder: "e.g. My Team", style: TextInputStyle.Short));
+
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
+            };
+
+            // Handles the team-name modal submitted from the button above,
+            // actually writing the comp into comps.json (same store as /addcomp).
+            discordClient.ModalSubmitted += async (s, e) =>
+            {
+                if (!e.Interaction.Data.CustomId.StartsWith("modal_save_comp|"))
+                    return;
+
+                var payload = e.Interaction.Data.CustomId.Substring("modal_save_comp|".Length);
+                var parts = payload.Split('|');
+                if (parts.Length != 2) return;
+
+                var agents = parts[0].Split(',').ToList();
+                var mapName = parts[1];
+                var teamName = e.Values.TryGetValue("team_name", out var value) ? value.Trim() : "";
+
+                if (string.IsNullOrWhiteSpace(teamName))
+                {
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                        new DiscordInteractionResponseBuilder()
+                            .WithContent("Team name can't be empty - nothing was saved.")
+                            .AsEphemeral(true));
+                    return;
+                }
+
+                CompsCommands.SaveCompForTeam(teamName, mapName, agents);
+
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent($"Saved **{string.Join(" / ", agents)}** for **{teamName}** on **{mapName}**. Check it with `/team`.")
+                        .AsEphemeral(true));
+            };
         }
 
         private static Task Client_Ready(DiscordClient sender, ReadyEventArgs args)
@@ -207,7 +257,7 @@ namespace AutoStrykeNew
             public ulong ChannelId { get; set; }
         }
 
-        private const string compsFilePath = "comps.json";
+        private const string compsFilePath = "my_team_comps.json";
         private const string matchResultsFilePath = "matchResults.json";
         private const string scheduleFilePath = "schedule.json";
 

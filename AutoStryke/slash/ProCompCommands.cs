@@ -248,6 +248,9 @@ public class ProCompCommands : ApplicationCommandModule
     public static string BuildShowAllCustomId(string[] queryAgents, string mapName) =>
         $"findprocomp_showall|{string.Join(",", queryAgents)}|{mapName}";
 
+    public static string BuildSaveCustomId(string[] queryAgents, string mapName) =>
+        $"findprocomp_save|{string.Join(",", queryAgents)}|{mapName}";
+
     [SlashCommand("findprocomp", "Show pro teams that have played a five-agent composition")]
     public async Task FindProComp(
         InteractionContext ctx,
@@ -306,10 +309,14 @@ public class ProCompCommands : ApplicationCommandModule
 
         if (scored.Count > InitialDisplayLimit)
         {
-            builder.AddComponents(new DiscordButtonComponent(
-                ButtonStyle.Secondary,
-                BuildShowAllCustomId(agentInputs, mapName),
-                $"Show all {scored.Count}"));
+            builder.AddComponents(
+                new DiscordButtonComponent(ButtonStyle.Secondary, BuildShowAllCustomId(agentInputs, mapName), $"Show all {scored.Count}"),
+                new DiscordButtonComponent(ButtonStyle.Success, BuildSaveCustomId(agentInputs, mapName), "💾 Save to team"));
+        }
+        else
+        {
+            builder.AddComponents(
+                new DiscordButtonComponent(ButtonStyle.Success, BuildSaveCustomId(agentInputs, mapName), "💾 Save to team"));
         }
 
         await ctx.EditResponseAsync(builder);
