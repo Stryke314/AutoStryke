@@ -1,5 +1,4 @@
-﻿// Program.cs
-using AutoStrykeNew.config;
+﻿using AutoStrykeNew.config;
 using AutoStryke.slash;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
@@ -18,9 +17,15 @@ namespace AutoStrykeNew
 {
     internal class Program
     {
-
+        // ============================================================
+        // STATE
+        // ============================================================
 
         private static DiscordClient client;
+
+        // ============================================================
+        // ENTRY POINT
+        // ============================================================
 
         static async Task Main(string[] args)
         {
@@ -43,6 +48,10 @@ namespace AutoStrykeNew
             await client.ConnectAsync();
             await Task.Delay(-1);
         }
+
+        // ============================================================
+        // CLIENT / CONFIG SETUP
+        // ============================================================
 
         private static DiscordClient BuildClient(jsonreader jsonreader)
         {
@@ -79,6 +88,7 @@ namespace AutoStrykeNew
         {
             discordClient.Ready += Client_Ready;
 
+            // Reacts with the "benerd" emoji whenever a specific user posts.
             discordClient.MessageCreated += async (s, e) =>
             {
                 if (e.Author.IsBot) return;
@@ -93,6 +103,7 @@ namespace AutoStrykeNew
                 }
             };
 
+            // Handles the "Submit Result" button by popping open a score-entry modal.
             discordClient.ComponentInteractionCreated += async (s, e) =>
             {
                 if (!e.Interaction.Data.CustomId.StartsWith("submit_result_"))
@@ -115,6 +126,38 @@ namespace AutoStrykeNew
 
                 await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
             };
+
+            // Handles the "Show all N" button under /findprocomp results by
+            // re-running the same lookup (encoded in the button's custom ID)
+            // without the initial 10-row display cap.
+            discordClient.ComponentInteractionCreated += async (s, e) =>
+            {
+                if (!e.Interaction.Data.CustomId.StartsWith("findprocomp_showall|"))
+                    return;
+
+                var parts = e.Interaction.Data.CustomId.Split('|');
+                if (parts.Length != 3) return;
+
+                var queryAgents = parts[1].Split(',');
+                var mapName = parts[2];
+
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.DeferredMessageUpdate);
+
+                var (scored, error) = await ProCompCommands.GetScoredComps(queryAgents, mapName);
+
+                if (error is not null)
+                {
+                    await e.Interaction.EditOriginalResponseAsync(new DiscordWebhookBuilder().WithContent(error));
+                    return;
+                }
+
+                var embed = ProCompCommands.BuildEmbed(scored, queryAgents, mapName, scored.Count);
+
+                // No components this time - the full list is now shown, so
+                // there's nothing left for the button to do.
+                await e.Interaction.EditOriginalResponseAsync(
+                    new DiscordWebhookBuilder().AddEmbed(embed));
+            };
         }
 
         private static Task Client_Ready(DiscordClient sender, ReadyEventArgs args)
@@ -125,6 +168,8 @@ namespace AutoStrykeNew
 
         private static void RegisterBackgroundTasks()
         {
+            // Every 5 minutes, check whether any scheduled matches have just
+            // ended and need a "submit result" prompt posted.
             _ = Task.Run(async () =>
             {
                 while (true)
@@ -134,6 +179,10 @@ namespace AutoStrykeNew
                 }
             });
         }
+
+        // ============================================================
+        // MATCH SCHEDULING / RESULTS
+        // ============================================================
 
         public class ValorantComp
         {

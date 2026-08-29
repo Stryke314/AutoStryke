@@ -1,24 +1,16 @@
 using System.Diagnostics;
 using System.Collections.Generic;
 using System.Linq;
-using System.Collections.Concurrent;
 using DSharpPlus;
 using DSharpPlus.Entities;
 using DSharpPlus.SlashCommands;
 using Microsoft.Data.Sqlite;
+
 public class ProCompCommands : ApplicationCommandModule
 {
     private static readonly string DataDirectory = Path.Combine(AppContext.BaseDirectory, "data");
     private static readonly string DatabasePath = Path.Combine(DataDirectory, "comps.db");
     private static readonly string ImporterPath = Path.Combine(DataDirectory, "pro_comp_importer.py");
-
-    private static readonly ConcurrentDictionary<string, ProCompSearch> PendingSearches = new();
-
-    private class ProCompSearch
-    {
-        public string Map { get; init; } = "";
-        public string[] Agents { get; init; } = Array.Empty<string>();
-    }
 
     public enum ProCompMap
     {
@@ -144,8 +136,7 @@ public class ProCompCommands : ApplicationCommandModule
         catch (Exception exception)
         {
             await ctx.EditResponseAsync(new DiscordWebhookBuilder()
-                .WithContent($"The update could not start: unluck guys gg"));
-            // {exception.Message} yeah i dont wanna dox myself ty very much
+                .WithContent($"The update could not start: {exception.Message}"));
         }
     }
 
@@ -161,6 +152,101 @@ public class ProCompCommands : ApplicationCommandModule
 
         return $"Updating pro-comp database...\n{bar}\n**{done}/{total}** ({ratio:P0}) — {currentLabel}";
     }
+
+    public record ScoredComp(string Team, string Comp, List<string> Links, double Similarity);
+
+    /// <summary>
+    /// Shared lookup used by both /findprocomp and the "Show all" button handler.
+    /// Fetches every comp for the map, merges duplicate (team, comp) rows from
+    /// separate matches into one entry with all their links, and scores each
+    /// against the query agents.
+    /// </summary>
+    public static async Task<(List<ScoredComp> Scored, string? Error)> GetScoredComps(string[] queryAgents, string mapName)
+    {
+        var rows = new List<(string Team, string Comp, string MatchLink)>();
+
+        try
+        {
+            await using var connection = new SqliteConnection($"Data Source={DatabasePath}");
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                SELECT team, comp, match_link
+                FROM compositions
+                WHERE lower(map) = lower($map)
+                """;
+            command.Parameters.AddWithValue("$map", mapName);
+
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+                rows.Add((reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? "" : reader.GetString(2)));
+        }
+        catch (Exception exception)
+        {
+            return (new List<ScoredComp>(), $"Something went wrong reading the database: {exception.Message}");
+        }
+
+        // Merge every match of the same (team, comp) pairing into one row,
+        // keeping every distinct match link so they can all be shown.
+        var merged = rows
+            .GroupBy(r => (r.Team, r.Comp))
+            .Select(g => new ScoredComp(
+                g.Key.Team,
+                g.Key.Comp,
+                g.Select(r => r.MatchLink).Where(l => !string.IsNullOrWhiteSpace(l)).Distinct().ToList(),
+                CompSimilarity.Compute(queryAgents, g.Key.Comp.Split(" / ", StringSplitOptions.None))
+            ));
+
+        const double SimilarityThreshold = 0.4;
+
+        var scored = merged
+            .Where(c => c.Similarity >= SimilarityThreshold)
+            .OrderByDescending(c => c.Similarity)
+            .ThenBy(c => c.Team)
+            .ToList();
+
+        return (scored, null);
+    }
+
+    public static DiscordEmbedBuilder BuildEmbed(List<ScoredComp> allScored, string[] queryAgents, string mapName, int displayLimit)
+    {
+        var composition = string.Join(" / ", queryAgents.OrderBy(a => a, StringComparer.OrdinalIgnoreCase));
+        var shown = allScored.Take(displayLimit).ToList();
+
+        var results = string.Join("\n", shown.Select(c =>
+        {
+            const int maxLinksShown = 3;
+            string linkPart = "";
+
+            if (c.Links.Count > 0)
+            {
+                var linkTexts = c.Links.Take(maxLinksShown)
+                    .Select((link, i) => $"[game {i + 1}]({link})");
+                linkPart = " — " + string.Join(" ", linkTexts);
+
+                if (c.Links.Count > maxLinksShown)
+                    linkPart += $" (+{c.Links.Count - maxLinksShown} more)";
+            }
+
+            return c.Similarity >= 0.999
+                ? $"✅ **{c.Team}** — 100%{linkPart}"
+                : $"• **{c.Team}** — {c.Similarity:P0} — {c.Comp}{linkPart}";
+        }));
+
+        var footer = allScored.Count > shown.Count
+            ? $"\n\nShowing {shown.Count} of {allScored.Count}."
+            : "";
+
+        return new DiscordEmbedBuilder()
+            .WithTitle("Pro teams using this composition")
+            .WithDescription($"**{composition}** on {mapName}\n\n{results}{footer}")
+            .WithColor(DiscordColor.Blurple);
+    }
+
+    private const int InitialDisplayLimit = 10;
+
+    public static string BuildShowAllCustomId(string[] queryAgents, string mapName) =>
+        $"findprocomp_showall|{string.Join(",", queryAgents)}|{mapName}";
 
     [SlashCommand("findprocomp", "Show pro teams that have played a five-agent composition")]
     public async Task FindProComp(
@@ -193,102 +279,45 @@ public class ProCompCommands : ApplicationCommandModule
             return;
         }
 
-        var queryAgents = agentInputs.ToArray();
         var mapName = map.ToString();
-        var rows = new List<(string Team, string Comp, string MatchLink)>();
 
         // Acknowledge immediately so Discord never times out, even if the
         // query below is slow or throws - we edit this response afterward.
         // Public (not ephemeral) so the whole channel sees the result.
         await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
 
-        try
-        {
-            await using var connection = new SqliteConnection($"Data Source={DatabasePath}");
-            await connection.OpenAsync();
-            await using var command = connection.CreateCommand();
-            command.CommandText = """
-                SELECT team, comp, match_link
-                FROM compositions
-                WHERE lower(map) = lower($map)
-                """;
-            command.Parameters.AddWithValue("$map", mapName);
+        var (scored, error) = await GetScoredComps(agentInputs, mapName);
 
-            await using var reader = await command.ExecuteReaderAsync();
-            while (await reader.ReadAsync())
-                rows.Add((reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? "" : reader.GetString(2)));
-        }
-        catch (Exception exception)
+        if (error is not null)
         {
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder()
-                .WithContent($"Something went wrong reading the database: {exception.Message}"));
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(error));
             return;
         }
-
-        if (rows.Count == 0)
-        {
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder()
-                .WithContent($"No recorded pro comps found for {mapName}."));
-            return;
-        }
-
-        // Collapse duplicate (team, comp) rows from separate matches into one,
-        // keeping the first real match link we find for that pairing.
-        var distinctComps = rows
-            .GroupBy(r => (r.Team, r.Comp))
-            .Select(g => (
-                g.Key.Team,
-                g.Key.Comp,
-                Link: g.Select(r => r.MatchLink).FirstOrDefault(l => !string.IsNullOrWhiteSpace(l)) ?? ""
-            ));
-
-        const double SimilarityThreshold = 0.4;
-
-        var scored = distinctComps
-            .Select(c => new
-            {
-                c.Team,
-                c.Comp,
-                c.Link,
-                Similarity = CompSimilarity.Compute(queryAgents,c.Comp.Split(new[] { " / " }, StringSplitOptions.None))
-            })
-            .Where(c => c.Similarity >= SimilarityThreshold)
-            .OrderByDescending(c => c.Similarity)
-            .ThenBy(c => c.Team)
-            .Take(25)
-            .ToList();
 
         if (scored.Count == 0)
         {
             await ctx.EditResponseAsync(new DiscordWebhookBuilder()
-                .WithContent($"No pro comps on {mapName} are close to **{string.Join(" / ", queryAgents)}**."));
+                .WithContent($"No pro comps on {mapName} are close to **{string.Join(" / ", agentInputs)}**."));
             return;
         }
 
-        var composition = string.Join(" / ", queryAgents.OrderBy(a => a, StringComparer.OrdinalIgnoreCase));
+        var embed = BuildEmbed(scored, agentInputs, mapName, InitialDisplayLimit);
+        var builder = new DiscordWebhookBuilder().AddEmbed(embed);
 
-        var results = string.Join("\n", scored.Select(c =>
+        if (scored.Count > InitialDisplayLimit)
         {
-            var linkPart = string.IsNullOrWhiteSpace(c.Link) ? "" : $" — [match]({c.Link})";
+            builder.AddComponents(new DiscordButtonComponent(
+                ButtonStyle.Secondary,
+                BuildShowAllCustomId(agentInputs, mapName),
+                $"Show all {scored.Count}"));
+        }
 
-            return c.Similarity >= 0.999
-                ? $"✅ **{c.Team}** — 100%{linkPart}"
-                : $"• **{c.Team}** — {c.Similarity:P0} — {c.Comp}{linkPart}";
-        }));
-
-        await ctx.EditResponseAsync(new DiscordWebhookBuilder()
-            .AddEmbed(new DiscordEmbedBuilder()
-                .WithTitle("Pro teams using this composition")
-                .WithDescription($"**{composition}** on {mapName}\n\n{results}")
-                .WithColor(DiscordColor.Blurple)));
+        await ctx.EditResponseAsync(builder);
     }
 
     private static string LastLine(string text)
     {
-        var line = text.Split(
-        new[] { '\r', '\n' },
-        StringSplitOptions.RemoveEmptyEntries)
-        .LastOrDefault();
+        var line = text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
         return string.IsNullOrWhiteSpace(line) ? "No details were returned." : line;
     }
 }
