@@ -159,25 +159,154 @@ namespace AutoStrykeNew
                     new DiscordWebhookBuilder().AddEmbed(embed));
             };
 
-            // Handles the "Save to team" button under /findprocomp results by
-            // opening a modal asking which team to save the searched comp under.
+            // Handles the "Save to team" button under /findprocomp results.
+            // First asks which specific result the user wants to save, since
+            // similarity matches differ from what was actually searched for.
             discordClient.ComponentInteractionCreated += async (s, e) =>
             {
                 if (!e.Interaction.Data.CustomId.StartsWith("findprocomp_save|"))
                     return;
 
                 var payload = e.Interaction.Data.CustomId.Substring("findprocomp_save|".Length);
+                var parts = payload.Split('|');
+                if (parts.Length != 2) return;
 
-                var modal = new DiscordInteractionResponseBuilder()
-                    .WithTitle("Save this comp to a team")
-                    .WithCustomId($"modal_save_comp|{payload}")
-                    .AddComponents(new TextInputComponent(
-                        "Team name", "team_name", required: true, placeholder: "e.g. My Team", style: TextInputStyle.Short));
+                var queryAgents = parts[0].Split(',');
+                var mapName = parts[1];
 
-                await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
+                var (scored, error) = await ProCompCommands.GetScoredComps(queryAgents, mapName);
+
+                if (error is not null || scored.Count == 0)
+                {
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                        new DiscordInteractionResponseBuilder()
+                            .WithContent(error ?? "No comps to save.")
+                            .AsEphemeral(true));
+                    return;
+                }
+
+                var options = scored
+                    .Take(25)
+                    .Select((c, index) => new DiscordSelectComponentOption(
+                        $"{c.Team} — {c.Similarity:P0}",
+                        index.ToString(),
+                        c.Comp.Length > 100 ? c.Comp.Substring(0, 100) : c.Comp))
+                    .ToList();
+
+                var select = new DiscordSelectComponent(
+                    $"findprocomp_pickcomp|{payload}", "Which comp do you want to save?", options);
+
+                var note = scored.Count > 25 ? $"\n(Showing the top 25 of {scored.Count} matches.)" : "";
+
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent($"Which comp would you like to save?{note}")
+                        .AddComponents(select)
+                        .AsEphemeral(true));
             };
 
-            // Handles the team-name modal submitted from the button above,
+            // Handles picking a specific result from the dropdown above, then
+            // moves on to asking which of the user's own teams to save it under.
+            discordClient.ComponentInteractionCreated += async (s, e) =>
+            {
+                if (!e.Interaction.Data.CustomId.StartsWith("findprocomp_pickcomp|"))
+                    return;
+
+                var payload = e.Interaction.Data.CustomId.Substring("findprocomp_pickcomp|".Length);
+                var parts = payload.Split('|');
+                if (parts.Length != 2) return;
+
+                var queryAgents = parts[0].Split(',');
+                var mapName = parts[1];
+
+                if (!int.TryParse(e.Interaction.Data.Values.FirstOrDefault(), out var chosenIndex))
+                    return;
+
+                // Recompute the same scored list (deterministic given an unchanged
+                // database) so we know exactly which comp was picked.
+                var (scored, error) = await ProCompCommands.GetScoredComps(queryAgents, mapName);
+
+                if (error is not null || chosenIndex < 0 || chosenIndex >= scored.Count)
+                {
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage,
+                        new DiscordInteractionResponseBuilder()
+                            .WithContent(error ?? "That comp couldn't be found anymore - please try again.")
+                            .AsEphemeral(true));
+                    return;
+                }
+
+                var chosen = scored[chosenIndex];
+                var chosenAgentsCsv = string.Join(",", chosen.Comp.Split(" / ", StringSplitOptions.None));
+                var nextPayload = $"{chosenAgentsCsv}|{mapName}";
+
+                var existingTeams = CompsCommands.GetAllTeamNames();
+
+                if (existingTeams.Count == 0)
+                {
+                    var modal = new DiscordInteractionResponseBuilder()
+                        .WithTitle("Save this comp to a team")
+                        .WithCustomId($"modal_save_comp|{nextPayload}")
+                        .AddComponents(new TextInputComponent(
+                            "Team name", "team_name", required: true, placeholder: "e.g. My Team", style: TextInputStyle.Short));
+
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
+                    return;
+                }
+
+                const string newTeamValue = "__new_team__";
+
+                var teamOptions = existingTeams
+                    .Take(24)
+                    .Select(team => new DiscordSelectComponentOption(team, team))
+                    .Append(new DiscordSelectComponentOption("➕ New team...", newTeamValue))
+                    .ToList();
+
+                var teamSelect = new DiscordSelectComponent(
+                    $"findprocomp_save_select|{nextPayload}", "Which team is this for?", teamOptions);
+
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent($"Saving **{chosen.Comp}** ({chosen.Team} — {chosen.Similarity:P0}). Which team is this for?")
+                        .AddComponents(teamSelect)
+                        .AsEphemeral(true));
+            };
+
+            // Handles picking a team (or "new team") from the dropdown above.
+            discordClient.ComponentInteractionCreated += async (s, e) =>
+            {
+                if (!e.Interaction.Data.CustomId.StartsWith("findprocomp_save_select|"))
+                    return;
+
+                var payload = e.Interaction.Data.CustomId.Substring("findprocomp_save_select|".Length);
+                var choice = e.Interaction.Data.Values.FirstOrDefault() ?? "";
+
+                if (choice == "__new_team__")
+                {
+                    var modal = new DiscordInteractionResponseBuilder()
+                        .WithTitle("Save this comp to a team")
+                        .WithCustomId($"modal_save_comp|{payload}")
+                        .AddComponents(new TextInputComponent(
+                            "Team name", "team_name", required: true, placeholder: "e.g. My Team", style: TextInputStyle.Short));
+
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
+                    return;
+                }
+
+                var parts = payload.Split('|');
+                if (parts.Length != 2) return;
+
+                var agents = parts[0].Split(',').ToList();
+                var mapName = parts[1];
+
+                CompsCommands.SaveCompForTeam(choice, mapName, agents);
+
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.UpdateMessage,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent($"Saved **{string.Join(" / ", agents)}** for **{choice}** on **{mapName}**. Check it with `/comps`.")
+                        .AsEphemeral(true));
+            };
+
+            // Handles the team-name modal submitted when the user picks "new team",
             // actually writing the comp into comps.json (same store as /addcomp).
             discordClient.ModalSubmitted += async (s, e) =>
             {
@@ -205,7 +334,69 @@ namespace AutoStrykeNew
 
                 await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                     new DiscordInteractionResponseBuilder()
-                        .WithContent($"Saved **{string.Join(" / ", agents)}** for **{teamName}** on **{mapName}**. Check it with `/team`.")
+                        .WithContent($"Saved **{string.Join(" / ", agents)}** for **{teamName}** on **{mapName}**. Check it with `/comps`.")
+                        .AsEphemeral(true));
+            };
+
+            // Handles picking a map to edit from /comps' dropdown - opens a
+            // modal pre-filled with that team's current comp on that map.
+            discordClient.ComponentInteractionCreated += async (s, e) =>
+            {
+                if (!e.Interaction.Data.CustomId.StartsWith("comps_edit_pick|"))
+                    return;
+
+                var team = e.Interaction.Data.CustomId.Substring("comps_edit_pick|".Length);
+                var map = e.Interaction.Data.Values.FirstOrDefault();
+                if (string.IsNullOrWhiteSpace(map)) return;
+
+                var db = CompsCommands.LoadDatabase();
+                var currentAgents = (db.ContainsKey(map) && db[map].ContainsKey(team))
+                    ? string.Join(", ", db[map][team])
+                    : "";
+
+                var modal = new DiscordInteractionResponseBuilder()
+                    .WithTitle($"Edit {team} on {map}")
+                    .WithCustomId($"modal_edit_comp|{team}|{map}")
+                    .AddComponents(new TextInputComponent(
+                        "Agents (comma-separated, 5 total)", "agents_input",
+                        value: currentAgents, required: true, style: TextInputStyle.Short));
+
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
+            };
+
+            // Handles the edit modal submitted above, overwriting that comp.
+            discordClient.ModalSubmitted += async (s, e) =>
+            {
+                if (!e.Interaction.Data.CustomId.StartsWith("modal_edit_comp|"))
+                    return;
+
+                var payload = e.Interaction.Data.CustomId.Substring("modal_edit_comp|".Length);
+                var parts = payload.Split('|');
+                if (parts.Length != 2) return;
+
+                var team = parts[0];
+                var map = parts[1];
+                var agentsInput = e.Values.TryGetValue("agents_input", out var value) ? value : "";
+
+                var agents = agentsInput.Split(',', StringSplitOptions.RemoveEmptyEntries)
+                    .Select(a => a.Trim())
+                    .Where(a => !string.IsNullOrWhiteSpace(a))
+                    .ToList();
+
+                if (agents.Count != 5)
+                {
+                    await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                        new DiscordInteractionResponseBuilder()
+                            .WithContent($"That's {agents.Count} agents, not 5 - nothing was changed.")
+                            .AsEphemeral(true));
+                    return;
+                }
+
+                CompsCommands.SaveCompForTeam(team, map, agents);
+
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent($"Updated **{team}** on **{map}**: {string.Join(" / ", agents)}")
                         .AsEphemeral(true));
             };
         }

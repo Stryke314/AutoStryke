@@ -33,7 +33,7 @@ namespace AutoStryke.slash
         // SCRIM / MATCH SCHEDULING
         // ============================================================
 
-        public const ulong StrykeID = 889088075395923998;
+        private const ulong StrykeID = 889088075395923998;
         private static string jsonFilePath = "scrims.json";
 
         [SlashCommand("Creatematch", "Schedule a scrim or match")]
@@ -330,33 +330,6 @@ namespace AutoStryke.slash
 
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder().WithContent($"✅ Comp for **{map}** saved:\n{string.Join(" ", formattedAgents)}"));
-        }
-
-        [SlashCommand("comps", "View all saved comps.")]
-        public async Task ViewAllCompsCommand(InteractionContext ctx)
-        {
-            var comps = Program.LoadComps();
-
-            if (comps.Count == 0)
-            {
-                await ctx.CreateResponseAsync("❌ No comps saved yet.");
-                return;
-            }
-
-            var embed = new DiscordEmbedBuilder()
-                .WithTitle("📋 All Saved Comps")
-                .WithColor(DiscordColor.Azure);
-
-            foreach (var kvp in comps)
-            {
-                var mapName = char.ToUpper(kvp.Key[0]) + kvp.Key[1..];
-                var agents = string.Join(" ", kvp.Value.Agents);
-                embed.AddField($"__{mapName}__", agents, false);
-            }
-
-            embed.WithFooter("Use /createcomp or a map-specific command to update comps.");
-
-            await ctx.CreateResponseAsync(embed);
         }
 
         private async Task ViewMapComp(InteractionContext ctx, string key, string displayName)

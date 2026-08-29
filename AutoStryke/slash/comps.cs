@@ -37,6 +37,17 @@ public class CompsCommands : ApplicationCommandModule
         SaveDatabase(db);
     }
 
+    /// <summary>Every distinct team name saved anywhere in the database, for the team-select dropdown.</summary>
+    public static List<string> GetAllTeamNames()
+    {
+        var db = LoadDatabase();
+        return db.Values
+            .SelectMany(teams => teams.Keys)
+            .Distinct()
+            .OrderBy(t => t)
+            .ToList();
+    }
+
     // ---------------- /addcomp ----------------
     [SlashCommand("addcomp", "Add a team's composition for a map")]
     public async Task AddCompCommand(InteractionContext ctx,
@@ -63,27 +74,46 @@ public class CompsCommands : ApplicationCommandModule
             .WithContent($"Saved comp for **{team}** on **{map}**."));
     }
 
-    // ---------------- /team ----------------
-    [SlashCommand("team", "Show a team's comp on a map")]
-    public async Task TeamCommand(InteractionContext ctx,
-        [Option("team", "Team name")] string team,
-        [Option("map", "Map name")] ProCompCommands.ProCompMap map)
+    // ---------------- /comps ----------------
+    [SlashCommand("comps", "View and edit a team's saved comps across every map")]
+    public async Task CompsCommand(InteractionContext ctx,
+        [Option("team", "Team name")] string team)
     {
-        await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
-
         var db = LoadDatabase();
-        var mapName = map.ToString();
 
-        if (db.ContainsKey(mapName) && db[mapName].ContainsKey(team))
+        var teamComps = db
+            .Where(mapEntry => mapEntry.Value.ContainsKey(team))
+            .Select(mapEntry => (Map: mapEntry.Key, Agents: mapEntry.Value[team]))
+            .OrderBy(entry => entry.Map)
+            .ToList();
+
+        if (teamComps.Count == 0)
         {
-            var comp = db[mapName][team];
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder()
-                .WithContent($"**{team}** on **{mapName}** plays: {string.Join(", ", comp)}"));
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent($"No comps saved for **{team}** yet. Use `/addcomp` to add one.")
+                    .AsEphemeral(true));
+            return;
         }
-        else
-        {
-            await ctx.EditResponseAsync(new DiscordWebhookBuilder()
-                .WithContent($"No comp found for **{team}** on **{mapName}**."));
-        }
+
+        var description = string.Join("\n", teamComps.Select(c => $"**{c.Map}**: {string.Join(" / ", c.Agents)}"));
+
+        var embed = new DiscordEmbedBuilder()
+            .WithTitle($"{team}'s comps")
+            .WithDescription(description)
+            .WithColor(DiscordColor.Azure);
+
+        var mapOptions = teamComps
+            .Take(25)
+            .Select(c => new DiscordSelectComponentOption(c.Map, c.Map, string.Join(" / ", c.Agents)))
+            .ToList();
+
+        var editSelect = new DiscordSelectComponent(
+            $"comps_edit_pick|{team}", "Edit a map's comp...", mapOptions);
+
+        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+            new DiscordInteractionResponseBuilder()
+                .AddEmbed(embed)
+                .AddComponents(editSelect));
     }
 }
