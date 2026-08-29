@@ -1,39 +1,52 @@
-﻿using AutoStrykeNew.config;
+﻿// Program.cs
+using AutoStrykeNew.config;
+using AutoStryke.slash;
 using DSharpPlus;
 using DSharpPlus.CommandsNext;
 using DSharpPlus.SlashCommands;
 using DSharpPlus.EventArgs;
-using Newtonsoft.Json;
-using System;
-using System.IO;
-using System.Collections.Generic;
-using AutoStryke.slash;
 using DSharpPlus.Entities;
 using DSharpPlus.Interactivity.Extensions;
-
+using Newtonsoft.Json;
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using System.Threading.Tasks;
 
 namespace AutoStrykeNew
 {
     internal class Program
     {
-        public static Dictionary<ulong, Dictionary<ulong, int>> AuraPoints = new();
-        private static DiscordClient client;
-        private static CommandsNextExtension commands;
 
-        public class ValorantComp
-        {
-            public string Map { get; set; } = "";
-            public List<string> Agents { get; set; } = new();
-        }
+
+        private static DiscordClient client;
 
         static async Task Main(string[] args)
         {
-            LoadAuraPoints();
-
             var jsonreader = new jsonreader();
             await jsonreader.ReadJSON();
 
-            var discordconfig = new DiscordConfiguration()
+            client = BuildClient(jsonreader);
+
+            RegisterEventHandlers(client);
+            RegisterBackgroundTasks();
+
+            var commandsNext = client.UseCommandsNext(BuildCommandsNextConfig(jsonreader));
+            commandsNext.RegisterCommands<Commands.Commands>();
+
+            var slash = client.UseSlashCommands();
+            slash.RegisterCommands<slashcommandstest>();
+            slash.RegisterCommands<CompsCommands>();
+            slash.RegisterCommands<ProCompCommands>();
+
+            await client.ConnectAsync();
+            await Task.Delay(-1);
+        }
+
+        private static DiscordClient BuildClient(jsonreader jsonreader)
+        {
+            var discordConfig = new DiscordConfiguration
             {
                 Intents = DiscordIntents.All,
                 Token = jsonreader.token,
@@ -41,24 +54,32 @@ namespace AutoStrykeNew
                 AutoReconnect = true,
             };
 
-            client = new DiscordClient(discordconfig);
+            var newClient = new DiscordClient(discordConfig);
 
-            client.UseInteractivity(new DSharpPlus.Interactivity.InteractivityConfiguration
+            newClient.UseInteractivity(new DSharpPlus.Interactivity.InteractivityConfiguration
             {
                 Timeout = TimeSpan.FromMinutes(2)
             });
 
-            client.Ready += Client_Ready;
+            return newClient;
+        }
 
-            var commandsconfig = new CommandsNextConfiguration()
+        private static CommandsNextConfiguration BuildCommandsNextConfig(jsonreader jsonreader)
+        {
+            return new CommandsNextConfiguration
             {
-                StringPrefixes = new string[] { jsonreader.prefix },
+                StringPrefixes = new[] { jsonreader.prefix },
                 EnableDms = true,
                 EnableMentionPrefix = true,
                 EnableDefaultHelp = true,
             };
+        }
 
-            client.MessageCreated += async (s, e) =>
+        private static void RegisterEventHandlers(DiscordClient discordClient)
+        {
+            discordClient.Ready += Client_Ready;
+
+            discordClient.MessageCreated += async (s, e) =>
             {
                 if (e.Author.IsBot) return;
 
@@ -72,51 +93,28 @@ namespace AutoStrykeNew
                 }
             };
 
-            _ = Task.Run(async () =>
+            discordClient.ComponentInteractionCreated += async (s, e) =>
             {
-                while (true)
-                {
-                    await CheckForResultPrompts();
-                    await Task.Delay(TimeSpan.FromMinutes(5));
-                }
-            });
+                if (!e.Interaction.Data.CustomId.StartsWith("submit_result_"))
+                    return;
 
-            client.ComponentInteractionCreated += async (s, e) =>
-            {
-                if (e.Interaction.Data.CustomId.StartsWith("submit_result_"))
-                {
-                    var parts = e.Interaction.Data.CustomId.Split('_');
-                    if (parts.Length < 5) return;
+                var parts = e.Interaction.Data.CustomId.Split('_');
+                if (parts.Length < 5) return;
 
-                    string opponent = parts[2];
-                    string map = parts[3];
-                    string dateStr = parts[4];
+                string opponent = parts[2];
+                string map = parts[3];
+                string dateStr = parts[4];
 
-                    var modal = new DiscordInteractionResponseBuilder()
-                        .WithTitle($"Result vs {opponent}")
-                        .WithCustomId($"modal_result_{opponent}_{map}_{dateStr}")
-                        .AddComponents(
-                            new TextInputComponent("Our Score", "our_score", required: true, placeholder: "e.g. 13", style: TextInputStyle.Short),
-                            new TextInputComponent("Their Score", "their_score", required: true, placeholder: "e.g. 7", style: TextInputStyle.Short)
-                        );
+                var modal = new DiscordInteractionResponseBuilder()
+                    .WithTitle($"Result vs {opponent}")
+                    .WithCustomId($"modal_result_{opponent}_{map}_{dateStr}")
+                    .AddComponents(
+                        new TextInputComponent("Our Score", "our_score", required: true, placeholder: "e.g. 13", style: TextInputStyle.Short),
+                        new TextInputComponent("Their Score", "their_score", required: true, placeholder: "e.g. 7", style: TextInputStyle.Short)
+                    );
 
-                    await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
-                }
+                await e.Interaction.CreateResponseAsync(InteractionResponseType.Modal, modal);
             };
-
-            // CommandsNext (prefix commands)
-            var commands = client.UseCommandsNext(commandsconfig);
-            commands.RegisterCommands<Commands.Commands>();
-
-            // Slash commands
-            var slash = client.UseSlashCommands();
-            slash.RegisterCommands<slashcommandstest>();
-            slash.RegisterCommands<CompsCommands>();
-            slash.RegisterCommands<ProCompCommands>();
-
-            await client.ConnectAsync();
-            await Task.Delay(-1);
-
         }
 
         private static Task Client_Ready(DiscordClient sender, ReadyEventArgs args)
@@ -125,40 +123,44 @@ namespace AutoStrykeNew
             return Task.CompletedTask;
         }
 
-        public static void SaveAuraPoints()
+        private static void RegisterBackgroundTasks()
         {
-            try
+            _ = Task.Run(async () =>
             {
-                var json = JsonConvert.SerializeObject(AuraPoints, Formatting.Indented);
-                File.WriteAllText("auraPoints.json", json);
-                Console.WriteLine("[DEBUG] Aura points saved.");
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[ERROR] Failed to save aura points: {ex.Message}");
-            }
+                while (true)
+                {
+                    await CheckForResultPrompts();
+                    await Task.Delay(TimeSpan.FromMinutes(5));
+                }
+            });
         }
 
-        public static void LoadAuraPoints()
+        public class ValorantComp
         {
-            try
-            {
-                if (File.Exists("auraPoints.json"))
-                {
-                    var json = File.ReadAllText("auraPoints.json");
-                    AuraPoints = JsonConvert.DeserializeObject<Dictionary<ulong, Dictionary<ulong, int>>>(json)
-                                 ?? new();
-                    Console.WriteLine("[DEBUG] Aura points loaded.");
-                }
-            }
-            catch (Exception ex)
-            {
-                Console.WriteLine($"[ERROR] Failed to load aura points: {ex.Message}");
-                AuraPoints = new();
-            }
+            public string Map { get; set; } = "";
+            public List<string> Agents { get; set; } = new();
+        }
+
+        public class MatchResult
+        {
+            public string Opponent { get; set; }
+            public string Map { get; set; }
+            public int OurScore { get; set; }
+            public int TheirScore { get; set; }
+            public DateTime Date { get; set; }
+        }
+
+        public class ScheduleEntry
+        {
+            public string Opponent { get; set; }
+            public string Map { get; set; }
+            public DateTime Date { get; set; }
+            public ulong ChannelId { get; set; }
         }
 
         private const string compsFilePath = "comps.json";
+        private const string matchResultsFilePath = "matchResults.json";
+        private const string scheduleFilePath = "schedule.json";
 
         public static void SaveComps(Dictionary<string, ValorantComp> comps)
         {
@@ -175,17 +177,6 @@ namespace AutoStrykeNew
             return JsonConvert.DeserializeObject<Dictionary<string, ValorantComp>>(json) ?? new();
         }
 
-        public class MatchResult
-        {
-            public string Opponent { get; set; }
-            public string Map { get; set; }
-            public int OurScore { get; set; }
-            public int TheirScore { get; set; }
-            public DateTime Date { get; set; }
-        }
-
-        private const string matchResultsFilePath = "matchResults.json";
-
         public static void SaveMatchResults(List<MatchResult> results)
         {
             var json = JsonConvert.SerializeObject(results, Formatting.Indented);
@@ -200,16 +191,6 @@ namespace AutoStrykeNew
             var json = File.ReadAllText(matchResultsFilePath);
             return JsonConvert.DeserializeObject<List<MatchResult>>(json) ?? new();
         }
-
-        public class ScheduleEntry
-        {
-            public string Opponent { get; set; }
-            public string Map { get; set; }
-            public DateTime Date { get; set; }
-            public ulong ChannelId { get; set; }
-        }
-
-        private const string scheduleFilePath = "schedule.json";
 
         public static List<ScheduleEntry> LoadSchedule()
         {
