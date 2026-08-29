@@ -144,7 +144,8 @@ public class ProCompCommands : ApplicationCommandModule
         catch (Exception exception)
         {
             await ctx.EditResponseAsync(new DiscordWebhookBuilder()
-                .WithContent($"The update could not start: {exception.Message}"));
+                .WithContent($"The update could not start: unluck guys gg"));
+            // {exception.Message} yeah i dont wanna dox myself ty very much
         }
     }
 
