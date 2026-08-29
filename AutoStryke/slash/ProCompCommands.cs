@@ -324,7 +324,7 @@ public class ProCompCommands : ApplicationCommandModule
 
     private static string LastLine(string text)
     {
-        var line = text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+        var line = text.Split(new[] { '\r', '\n' },StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
         return string.IsNullOrWhiteSpace(line) ? "No details were returned." : line;
     }
 }
