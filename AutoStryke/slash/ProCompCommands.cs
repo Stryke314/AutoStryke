@@ -59,7 +59,7 @@ public class ProCompCommands : ApplicationCommandModule
         {
             var startInfo = new ProcessStartInfo
             {
-                FileName = Environment.GetEnvironmentVariable("PRO_COMP_PYTHON") ?? "python",
+                FileName = Environment.GetEnvironmentVariable("PRO_COMP_PYTHON") ?? "python3",
                 WorkingDirectory = DataDirectory,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,

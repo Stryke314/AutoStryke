@@ -20,5 +20,11 @@
     <None Update="data\requirements.txt" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
+	<ItemGroup>
+		<None Update="data\**\*">
+			<CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+		</None>
+	</ItemGroup>
+
 </Project>
 
