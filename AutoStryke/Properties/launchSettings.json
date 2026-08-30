@@ -1,0 +1,10 @@
+{
+  "profiles": {
+    "AutoStryke": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "PRO_COMP_PYTHON": "python3"
+      }
+    }
+  }
+}
