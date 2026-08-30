@@ -12,6 +12,10 @@ namespace AutoStrykeNew.config
     {
         public string token { get; set; }
         public string prefix { get; set; }
+        public string henrikApiKey { get; set; }
+        public string premierTeamName { get; set; }
+        public string premierTeamTag { get; set; }
+        public string premierRegion { get; set; }
 
         public async Task ReadJSON()
         {
@@ -34,6 +38,10 @@ namespace AutoStrykeNew.config
 
                 this.token = data.token;
                 this.prefix = data.prefix;
+                this.henrikApiKey = data.henrikApiKey;
+                this.premierTeamName = data.premierTeamName;
+                this.premierTeamTag = data.premierTeamTag;
+                this.premierRegion = data.premierRegion;
             }
         }
     }
@@ -42,5 +50,9 @@ namespace AutoStrykeNew.config
     {
         public string token { get; set; }
         public string prefix { get; set; }
+        public string henrikApiKey { get; set; }
+        public string premierTeamName { get; set; }
+        public string premierTeamTag { get; set; }
+        public string premierRegion { get; set; }
     }
 }

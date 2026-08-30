@@ -46,6 +46,14 @@ namespace AutoStrykeNew
             slash.RegisterCommands<ProCompCommands>();
 
             await client.ConnectAsync();
+
+            // ONE-TIME CLEANUP: clears leftover guild-scoped commands from
+            // earlier testing so they stop duplicating the global ones.
+            // Remove this block after running it once successfully.
+            //await client.BulkOverwriteGuildApplicationCommandsAsync(
+            //    1538210640420802662, Array.Empty<DiscordApplicationCommand>());
+            //Console.WriteLine("Cleared guild-scoped commands for the test server.");
+
             await Task.Delay(-1);
         }
 
@@ -419,17 +427,40 @@ namespace AutoStrykeNew
                     await Task.Delay(TimeSpan.FromMinutes(5));
                 }
             });
+
+            // Every 10 minutes, check for newly completed Premier matches via
+            // HenrikDev's API and auto-fill them into matchResults.json.
+            _ = Task.Run(async () =>
+            {
+                var jsonreader = new jsonreader();
+                await jsonreader.ReadJSON();
+
+                while (true)
+                {
+                    try
+                    {
+                        var added = await PremierResultsPoller.CheckForNewResults(
+                            jsonreader.henrikApiKey,
+                            jsonreader.premierTeamName,
+                            jsonreader.premierTeamTag,
+                            jsonreader.premierRegion);
+
+                        if (added > 0)
+                            Console.WriteLine($"Added {added} new Premier result(s).");
+                    }
+                    catch (Exception ex)
+                    {
+                        Console.WriteLine($"Premier polling failed: {ex.Message}");
+                    }
+
+                    await Task.Delay(TimeSpan.FromMinutes(10));
+                }
+            });
         }
 
         // ============================================================
         // MATCH SCHEDULING / RESULTS
         // ============================================================
-
-        public class ValorantComp
-        {
-            public string Map { get; set; } = "";
-            public List<string> Agents { get; set; } = new();
-        }
 
         public class MatchResult
         {
@@ -448,24 +479,8 @@ namespace AutoStrykeNew
             public ulong ChannelId { get; set; }
         }
 
-        private const string compsFilePath = "my_team_comps.json";
         private const string matchResultsFilePath = "matchResults.json";
         private const string scheduleFilePath = "schedule.json";
-
-        public static void SaveComps(Dictionary<string, ValorantComp> comps)
-        {
-            var json = JsonConvert.SerializeObject(comps, Formatting.Indented);
-            File.WriteAllText(compsFilePath, json);
-        }
-
-        public static Dictionary<string, ValorantComp> LoadComps()
-        {
-            if (!File.Exists(compsFilePath))
-                return new();
-
-            var json = File.ReadAllText(compsFilePath);
-            return JsonConvert.DeserializeObject<Dictionary<string, ValorantComp>>(json) ?? new();
-        }
 
         public static void SaveMatchResults(List<MatchResult> results)
         {

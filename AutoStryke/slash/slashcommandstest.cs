@@ -14,21 +14,6 @@ namespace AutoStryke.slash
 {
     public class slashcommandstest : ApplicationCommandModule
     {
-        public enum ValorantMap
-        {
-            [ChoiceName("Ascent")] Ascent,
-            [ChoiceName("Haven")] Haven,
-            [ChoiceName("Split")] Split,
-            [ChoiceName("Bind")] Bind,
-            [ChoiceName("Icebox")] Icebox,
-            [ChoiceName("Pearl")] Pearl,
-            [ChoiceName("Fracture")] Fracture,
-            [ChoiceName("Sunset")] Sunset,
-            [ChoiceName("Abyss")] Abyss,
-            [ChoiceName("Lotus")] Lotus,
-            [ChoiceName("Breeze")] Breeze
-        }
-
         // ============================================================
         // SCRIM / MATCH SCHEDULING
         // ============================================================
@@ -285,115 +270,6 @@ namespace AutoStryke.slash
                         .AsEphemeral(true));
             }
         }
-
-        // ============================================================
-        // MANUAL "OUR TEAM" COMPS (comps.json - separate from the pro-comp database)
-        // ============================================================
-
-        [SlashCommand("createcomp", "Create a comp for a specific map. This will overwrite the existing comp.")]
-        public async Task CreateCompCommand(InteractionContext ctx,
-            [Option("map", "Select a Valorant map")] ValorantMap map,
-            [Option("agent1", "First agent")] string agent1,
-            [Option("agent2", "Second agent")] string agent2,
-            [Option("agent3", "Third agent")] string agent3,
-            [Option("agent4", "Fourth agent")] string agent4,
-            [Option("agent5", "Fifth agent")] string agent5)
-        {
-            var comps = Program.LoadComps();
-
-            var agentNames = new[] { agent1, agent2, agent3, agent4, agent5 };
-            var formattedAgents = new List<string>();
-
-            foreach (var name in agentNames)
-            {
-                var emojiName = name.ToLower();
-                var emoji = ctx.Guild.Emojis.Values.FirstOrDefault(e => e.Name.ToLower() == emojiName);
-
-                if (emoji != null)
-                {
-                    formattedAgents.Add(emoji.ToString());
-                }
-                else
-                {
-                    formattedAgents.Add(name);
-                }
-            }
-
-            var newComp = new Program.ValorantComp
-            {
-                Map = map.ToString().ToLower(),
-                Agents = formattedAgents
-            };
-
-            comps[map.ToString().ToLower()] = newComp;
-            Program.SaveComps(comps);
-
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder().WithContent($"✅ Comp for **{map}** saved:\n{string.Join(" ", formattedAgents)}"));
-        }
-
-        private async Task ViewMapComp(InteractionContext ctx, string key, string displayName)
-        {
-            var comps = Program.LoadComps();
-
-            if (comps.TryGetValue(key, out var comp))
-            {
-                var emojiList = new List<string>();
-
-                foreach (var agent in comp.Agents)
-                {
-                    var emojiName = agent.Trim(':');
-                    var emoji = ctx.Guild.Emojis.Values.FirstOrDefault(e => e.Name.ToLower() == emojiName);
-
-                    emojiList.Add(emoji?.ToString() ?? agent);
-                }
-
-                await ctx.CreateResponseAsync(
-                    InteractionResponseType.ChannelMessageWithSource,
-                    new DiscordInteractionResponseBuilder()
-                        .WithContent($"**{displayName} Comp:**\n{string.Join(" ", emojiList)}"));
-            }
-            else
-            {
-                await ctx.CreateResponseAsync(
-                    InteractionResponseType.ChannelMessageWithSource,
-                    new DiscordInteractionResponseBuilder()
-                        .WithContent($"❌ No comp saved for {displayName}."));
-            }
-        }
-
-        [SlashCommand("ascent", "View the comp for Ascent")]
-        public async Task ViewAscentComp(InteractionContext ctx) => await ViewMapComp(ctx, "ascent", "Ascent");
-
-        [SlashCommand("haven", "View the comp for Haven")]
-        public async Task ViewHavenComp(InteractionContext ctx) => await ViewMapComp(ctx, "haven", "Haven");
-
-        [SlashCommand("split", "View the comp for Split")]
-        public async Task ViewSplitComp(InteractionContext ctx) => await ViewMapComp(ctx, "split", "Split");
-
-        [SlashCommand("bind", "View the comp for Bind")]
-        public async Task ViewBindComp(InteractionContext ctx) => await ViewMapComp(ctx, "bind", "Bind");
-
-        [SlashCommand("icebox", "View the comp for Icebox")]
-        public async Task ViewIceboxComp(InteractionContext ctx) => await ViewMapComp(ctx, "icebox", "Icebox");
-
-        [SlashCommand("pearl", "View the comp for Pearl")]
-        public async Task ViewPearlComp(InteractionContext ctx) => await ViewMapComp(ctx, "pearl", "Pearl");
-
-        [SlashCommand("fracture", "View the comp for Fracture")]
-        public async Task ViewFractureComp(InteractionContext ctx) => await ViewMapComp(ctx, "fracture", "Fracture");
-
-        [SlashCommand("sunset", "View the comp for Sunset")]
-        public async Task ViewSunsetComp(InteractionContext ctx) => await ViewMapComp(ctx, "sunset", "Sunset");
-
-        [SlashCommand("abyss", "View the comp for Abyss")]
-        public async Task ViewAbyssComp(InteractionContext ctx) => await ViewMapComp(ctx, "abyss", "Abyss");
-
-        [SlashCommand("lotus", "View the comp for Lotus")]
-        public async Task ViewLotusComp(InteractionContext ctx) => await ViewMapComp(ctx, "lotus", "Lotus");
-
-        [SlashCommand("breeze", "View the comp for Breeze")]
-        public async Task ViewBreezeComp(InteractionContext ctx) => await ViewMapComp(ctx, "breeze", "Breeze");
 
         // ============================================================
         // MATCH RESULTS

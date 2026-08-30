@@ -1,4 +1,8 @@
 ﻿{
   "token": "token",
-  "prefix": "!"
+  "prefix": "!",
+  "henrikApiKey": "HDEV-23efb788-438a-4869-825a-0084c34be38c",
+  "premierTeamName": "Sea Creatures",
+  "premierTeamTag": "SEA",
+  "premierRegion": "eu"
 }
