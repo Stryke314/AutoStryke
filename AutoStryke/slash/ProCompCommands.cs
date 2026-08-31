@@ -66,6 +66,7 @@ public class ProCompCommands : ApplicationCommandModule
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
+            Console.WriteLine($"[updateprocomps] Using interpreter: '{startInfo.FileName}' (PRO_COMP_PYTHON env var = '{Environment.GetEnvironmentVariable("PRO_COMP_PYTHON") ?? "(not set)"}')");
             startInfo.ArgumentList.Add(ImporterPath);
             // Make sure Python flushes output immediately rather than buffering
             // it up, so our line-by-line reader below actually sees it live.
