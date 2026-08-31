@@ -32,6 +32,8 @@ namespace AutoStrykeNew
             var jsonreader = new jsonreader();
             await jsonreader.ReadJSON();
 
+            ProCompCommands.PythonInterpreter = jsonreader.pythonInterpreter;
+
             client = BuildClient(jsonreader);
 
             RegisterEventHandlers(client);
@@ -50,9 +52,9 @@ namespace AutoStrykeNew
             // ONE-TIME CLEANUP: clears leftover guild-scoped commands from
             // earlier testing so they stop duplicating the global ones.
             // Remove this block after running it once successfully.
-            //await client.BulkOverwriteGuildApplicationCommandsAsync(
-            //    1538210640420802662, Array.Empty<DiscordApplicationCommand>());
-            //Console.WriteLine("Cleared guild-scoped commands for the test server.");
+            await client.BulkOverwriteGuildApplicationCommandsAsync(
+                1538210640420802662, Array.Empty<DiscordApplicationCommand>());
+            Console.WriteLine("Cleared guild-scoped commands for the test server.");
 
             await Task.Delay(-1);
         }

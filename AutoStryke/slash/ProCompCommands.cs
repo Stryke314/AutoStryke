@@ -12,6 +12,12 @@ public class ProCompCommands : ApplicationCommandModule
     private static readonly string DatabasePath = Path.Combine(DataDirectory, "comps.db");
     private static readonly string ImporterPath = Path.Combine(DataDirectory, "pro_comp_importer.py");
 
+    /// <summary>Set once at startup from config.json's "pythonInterpreter" field.
+    /// Takes priority over the PRO_COMP_PYTHON environment variable, which is
+    /// kept only as a fallback since it proved unreliable across terminal
+    /// sessions.</summary>
+    public static string PythonInterpreter { get; set; }
+
     public enum ProCompMap
     {
         [ChoiceName("Ascent")] Ascent,
@@ -59,14 +65,16 @@ public class ProCompCommands : ApplicationCommandModule
         {
             var startInfo = new ProcessStartInfo
             {
-                FileName = Environment.GetEnvironmentVariable("PRO_COMP_PYTHON") ?? "python3",
+                FileName = PythonInterpreter
+                    ?? Environment.GetEnvironmentVariable("PRO_COMP_PYTHON")
+                    ?? "python",
                 WorkingDirectory = DataDirectory,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
                 CreateNoWindow = true,
             };
-            Console.WriteLine($"[updateprocomps] Using interpreter: '{startInfo.FileName}' (PRO_COMP_PYTHON env var = '{Environment.GetEnvironmentVariable("PRO_COMP_PYTHON") ?? "(not set)"}')");
+            Console.WriteLine($"[updateprocomps] Using interpreter: '{startInfo.FileName}' (config pythonInterpreter = '{PythonInterpreter ?? "(not set)"}', PRO_COMP_PYTHON env var = '{Environment.GetEnvironmentVariable("PRO_COMP_PYTHON") ?? "(not set)"}')");
             startInfo.ArgumentList.Add(ImporterPath);
             // Make sure Python flushes output immediately rather than buffering
             // it up, so our line-by-line reader below actually sees it live.
@@ -325,7 +333,7 @@ public class ProCompCommands : ApplicationCommandModule
 
     private static string LastLine(string text)
     {
-        var line = text.Split(new[] { '\r', '\n' },StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
+        var line = text.Split(['\r', '\n'], StringSplitOptions.RemoveEmptyEntries).LastOrDefault();
         return string.IsNullOrWhiteSpace(line) ? "No details were returned." : line;
     }
 }

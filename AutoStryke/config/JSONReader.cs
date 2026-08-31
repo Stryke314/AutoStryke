@@ -16,6 +16,7 @@ namespace AutoStrykeNew.config
         public string premierTeamName { get; set; }
         public string premierTeamTag { get; set; }
         public string premierRegion { get; set; }
+        public string pythonInterpreter { get; set; }
 
         public async Task ReadJSON()
         {
@@ -42,6 +43,7 @@ namespace AutoStrykeNew.config
                 this.premierTeamName = data.premierTeamName;
                 this.premierTeamTag = data.premierTeamTag;
                 this.premierRegion = data.premierRegion;
+                this.pythonInterpreter = data.pythonInterpreter;
             }
         }
     }
@@ -54,5 +56,6 @@ namespace AutoStrykeNew.config
         public string premierTeamName { get; set; }
         public string premierTeamTag { get; set; }
         public string premierRegion { get; set; }
+        public string pythonInterpreter { get; set; }
     }
 }
