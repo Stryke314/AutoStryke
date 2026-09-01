@@ -44,7 +44,7 @@ result tracking.
 
    **Never commit this file.** If you ever see a real key show up in
    `git status` as a new/modified file, stop and check `.gitignore` before
-   committing.
+   committing. Committing this file will result in your discord bot key being leaked and automatically frozen
 
 2. Run the bot from the `AutoStryke/AutoStryke` project folder:
    ```
