@@ -162,17 +162,27 @@ public class ProCompCommands : ApplicationCommandModule
         return $"Updating pro-comp database...\n{bar}\n**{done}/{total}** ({ratio:P0}) — {currentLabel}";
     }
 
-    public record ScoredComp(string Team, string Comp, List<string> Links, double Similarity);
+    public record ScoredComp(string Team, string Map, string Comp, List<string> Links, double Similarity);
 
     /// <summary>
-    /// Shared lookup used by both /findprocomp and the "Show all" button handler.
-    /// Fetches every comp for the map, merges duplicate (team, comp) rows from
-    /// separate matches into one entry with all their links, and scores each
-    /// against the query agents.
+    /// Shared lookup used by /findprocomp, /findmycomp, and the "Show all"
+    /// button handler. Fetches every comp (optionally filtered to one map),
+    /// merges duplicate (team, map, comp) rows from separate matches into
+    /// one entry with all their links, then scores them one of two ways:
+    ///
+    /// - 5 agents given: ranked by similarity, same as before.
+    /// - 1-4 agents given ("core" search): every comp that CONTAINS all the
+    ///   given agents matches, regardless of the other agents in it. No
+    ///   percentage is meaningful here, so Similarity is set to -1 as a
+    ///   sentinel meaning "core match, don't show a percentage".
+    ///
+    /// mapName null/empty means "search every map".
     /// </summary>
-    public static async Task<(List<ScoredComp> Scored, string? Error)> GetScoredComps(string[] queryAgents, string mapName)
+    public static async Task<(List<ScoredComp> Scored, string? Error)> GetScoredComps(string[] queryAgents, string? mapName)
     {
-        var rows = new List<(string Team, string Comp, string MatchLink)>();
+        mapName = string.IsNullOrWhiteSpace(mapName) ? null : mapName;
+
+        var rows = new List<(string Team, string Map, string Comp, string MatchLink)>();
 
         try
         {
@@ -180,39 +190,58 @@ public class ProCompCommands : ApplicationCommandModule
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT team, comp, match_link
+                SELECT team, map, comp, match_link
                 FROM compositions
-                WHERE lower(map) = lower($map)
+                WHERE ($map IS NULL OR lower(map) = lower($map))
                 """;
-            command.Parameters.AddWithValue("$map", mapName);
+            command.Parameters.AddWithValue("$map", (object?)mapName ?? DBNull.Value);
 
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
-                rows.Add((reader.GetString(0), reader.GetString(1), reader.IsDBNull(2) ? "" : reader.GetString(2)));
+                rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? "" : reader.GetString(3)));
         }
         catch (Exception exception)
         {
             return (new List<ScoredComp>(), $"Something went wrong reading the database: {exception.Message}");
         }
 
-        // Merge every match of the same (team, comp) pairing into one row,
-        // keeping every distinct match link so they can all be shown.
+        // Merge every match of the same (team, map, comp) pairing into one
+        // row, keeping every distinct match link so they can all be shown.
         var merged = rows
-            .GroupBy(r => (r.Team, r.Comp))
-            .Select(g => new ScoredComp(
+            .GroupBy(r => (r.Team, r.Map, r.Comp))
+            .Select(g => new
+            {
                 g.Key.Team,
+                g.Key.Map,
                 g.Key.Comp,
-                g.Select(r => r.MatchLink).Where(l => !string.IsNullOrWhiteSpace(l)).Distinct().ToList(),
-                CompSimilarity.Compute(queryAgents, g.Key.Comp.Split(" / ", StringSplitOptions.None))
-            ));
+                Links = g.Select(r => r.MatchLink).Where(l => !string.IsNullOrWhiteSpace(l)).Distinct().ToList(),
+                CompAgents = g.Key.Comp.Split(" / ", StringSplitOptions.None),
+            });
 
-        const double SimilarityThreshold = 0.4;
+        List<ScoredComp> scored;
 
-        var scored = merged
-            .Where(c => c.Similarity >= SimilarityThreshold)
-            .OrderByDescending(c => c.Similarity)
-            .ThenBy(c => c.Team)
-            .ToList();
+        if (queryAgents.Length == 5)
+        {
+            const double SimilarityThreshold = 0.4;
+
+            scored = merged
+                .Select(c => new ScoredComp(c.Team, c.Map, c.Comp, c.Links, CompSimilarity.Compute(queryAgents, c.CompAgents)))
+                .Where(c => c.Similarity >= SimilarityThreshold)
+                .OrderByDescending(c => c.Similarity)
+                .ThenBy(c => c.Team)
+                .ToList();
+        }
+        else
+        {
+            // Core search: every comp that contains all the given agents,
+            // regardless of what else is in it.
+            scored = merged
+                .Where(c => queryAgents.All(a => c.CompAgents.Contains(a, StringComparer.OrdinalIgnoreCase)))
+                .Select(c => new ScoredComp(c.Team, c.Map, c.Comp, c.Links, -1))
+                .OrderBy(c => c.Team)
+                .ThenBy(c => c.Map)
+                .ToList();
+        }
 
         return (scored, null);
     }
@@ -220,35 +249,56 @@ public class ProCompCommands : ApplicationCommandModule
     public static DiscordEmbedBuilder BuildEmbed(List<ScoredComp> allScored, string[] queryAgents, string mapName, int displayLimit)
     {
         var composition = string.Join(" / ", queryAgents.OrderBy(a => a, StringComparer.OrdinalIgnoreCase));
-        var shown = allScored.Take(displayLimit).ToList();
 
-        var results = string.Join("\n", shown.Select(c =>
+        const int maxLinksShown = 3;
+        const int discordDescriptionLimit = 4096;
+
+        var header = $"**{composition}** on {mapName}\n\n";
+        var lines = new List<string>();
+        int shownCount = 0;
+
+        // Reserve room for a closing "showing X of Y" footer, whose exact
+        // length we won't know until after we've decided how many lines fit -
+        // a fixed buffer avoids the chicken-and-egg problem cheaply.
+        const int footerBuffer = 80;
+        int budget = discordDescriptionLimit - header.Length - footerBuffer;
+        int used = 0;
+
+        foreach (var c in allScored)
         {
-            const int maxLinksShown = 3;
-            string linkPart = "";
+            if (shownCount >= displayLimit)
+                break;
 
+            string linkPart = "";
             if (c.Links.Count > 0)
             {
-                var linkTexts = c.Links.Take(maxLinksShown)
-                    .Select((link, i) => $"[game {i + 1}]({link})");
+                var linkTexts = c.Links.Take(maxLinksShown).Select((link, i) => $"[game {i + 1}]({link})");
                 linkPart = " — " + string.Join(" ", linkTexts);
-
                 if (c.Links.Count > maxLinksShown)
                     linkPart += $" (+{c.Links.Count - maxLinksShown} more)";
             }
 
-            return c.Similarity >= 0.999
+            var line = c.Similarity >= 0.999
                 ? $"✅ **{c.Team}** — 100%{linkPart}"
                 : $"• **{c.Team}** — {c.Similarity:P0} — {c.Comp}{linkPart}";
-        }));
 
-        var footer = allScored.Count > shown.Count
-            ? $"\n\nShowing {shown.Count} of {allScored.Count}."
+            if (used + line.Length + 1 > budget)
+                break;
+
+            lines.Add(line);
+            used += line.Length + 1;
+            shownCount++;
+        }
+
+        var results = string.Join("\n", lines);
+
+        var footer = allScored.Count > shownCount
+            ? $"\n\nShowing {shownCount} of {allScored.Count}."
             : "";
 
         return new DiscordEmbedBuilder()
             .WithTitle("Pro teams using this composition")
-            .WithDescription($"**{composition}** on {mapName}\n\n{results}{footer}")
+            .WithDescription($"{header}{results}{footer}")
             .WithColor(DiscordColor.Blurple);
     }
 
