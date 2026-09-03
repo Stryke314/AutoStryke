@@ -279,8 +279,10 @@ public class ProCompCommands : ApplicationCommandModule
             }
 
             var line = c.Similarity >= 0.999
-                ? $"✅ **{c.Team}** — 100%{linkPart}"
-                : $"• **{c.Team}** — {c.Similarity:P0} — {c.Comp}{linkPart}";
+                ? $"✅ **{c.Team}** — {c.Map} — 100%{linkPart}"
+                : c.Similarity < 0
+                    ? $"• **{c.Team}** — {c.Map} — {c.Comp}{linkPart}"
+                    : $"• **{c.Team}** — {c.Map} — {c.Similarity:P0} — {c.Comp}{linkPart}";
 
             if (used + line.Length + 1 > budget)
                 break;
@@ -310,24 +312,25 @@ public class ProCompCommands : ApplicationCommandModule
     public static string BuildSaveCustomId(string[] queryAgents, string mapName) =>
         $"findprocomp_save|{string.Join(",", queryAgents)}|{mapName}";
 
-    [SlashCommand("findprocomp", "Show pro teams that have played a five-agent composition")]
+    [SlashCommand("findprocomp", "Find pro teams using a comp (1-5 agents; map is optional)")]
     public async Task FindProComp(
         InteractionContext ctx,
         [Option("agent1", "First agent"), Autocomplete(typeof(AgentAutocompleteProvider))] string agent1,
-        [Option("agent2", "Second agent"), Autocomplete(typeof(AgentAutocompleteProvider))] string agent2,
-        [Option("agent3", "Third agent"), Autocomplete(typeof(AgentAutocompleteProvider))] string agent3,
-        [Option("agent4", "Fourth agent"), Autocomplete(typeof(AgentAutocompleteProvider))] string agent4,
-        [Option("agent5", "Fifth agent"), Autocomplete(typeof(AgentAutocompleteProvider))] string agent5,
-        [Option("map", "Map to search")] ProCompMap map)
+        [Option("agent2", "Second agent (optional)"), Autocomplete(typeof(AgentAutocompleteProvider))] string? agent2 = null,
+        [Option("agent3", "Third agent (optional)"), Autocomplete(typeof(AgentAutocompleteProvider))] string? agent3 = null,
+        [Option("agent4", "Fourth agent (optional)"), Autocomplete(typeof(AgentAutocompleteProvider))] string? agent4 = null,
+        [Option("agent5", "Fifth agent (optional)"), Autocomplete(typeof(AgentAutocompleteProvider))] string? agent5 = null,
+        [Option("map", "Map to search (optional - leave blank to search every map)")] ProCompMap? map = null)
     {
-        var agentInputs = new[] { agent1, agent2, agent3, agent4, agent5 };
+        var agentInputs = new[] { agent1, agent2, agent3, agent4, agent5 }
+            .Where(a => !string.IsNullOrWhiteSpace(a))
+            .ToArray();
 
-        if (agentInputs.Any(string.IsNullOrWhiteSpace) ||
-            agentInputs.Distinct(StringComparer.OrdinalIgnoreCase).Count() != 5)
+        if (agentInputs.Distinct(StringComparer.OrdinalIgnoreCase).Count() != agentInputs.Length)
         {
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
-                    .WithContent("Pick five different agents, one per option.")
+                    .WithContent("Don't repeat the same agent twice.")
                     .AsEphemeral(true));
             return;
         }
@@ -341,7 +344,8 @@ public class ProCompCommands : ApplicationCommandModule
             return;
         }
 
-        var mapName = map.ToString();
+        var mapName = map?.ToString();
+        var mapLabel = mapName ?? "any map";
 
         // Acknowledge immediately so Discord never times out, even if the
         // query below is slow or throws - we edit this response afterward.
@@ -359,23 +363,98 @@ public class ProCompCommands : ApplicationCommandModule
         if (scored.Count == 0)
         {
             await ctx.EditResponseAsync(new DiscordWebhookBuilder()
-                .WithContent($"No pro comps on {mapName} are close to **{string.Join(" / ", agentInputs)}**."));
+                .WithContent($"No pro comps on {mapLabel} match **{string.Join(" / ", agentInputs)}**."));
             return;
         }
 
-        var embed = BuildEmbed(scored, agentInputs, mapName, InitialDisplayLimit);
+        var embed = BuildEmbed(scored, agentInputs, mapLabel, InitialDisplayLimit);
         var builder = new DiscordWebhookBuilder().AddEmbed(embed);
 
         if (scored.Count > InitialDisplayLimit)
         {
             builder.AddComponents(
-                new DiscordButtonComponent(ButtonStyle.Secondary, BuildShowAllCustomId(agentInputs, mapName), $"Show all {scored.Count}"),
-                new DiscordButtonComponent(ButtonStyle.Success, BuildSaveCustomId(agentInputs, mapName), "💾 Save to team"));
+                new DiscordButtonComponent(ButtonStyle.Secondary, BuildShowAllCustomId(agentInputs, mapName ?? ""), $"Show all {scored.Count}"),
+                new DiscordButtonComponent(ButtonStyle.Success, BuildSaveCustomId(agentInputs, mapName ?? ""), "💾 Save to team"));
         }
         else
         {
             builder.AddComponents(
-                new DiscordButtonComponent(ButtonStyle.Success, BuildSaveCustomId(agentInputs, mapName), "💾 Save to team"));
+                new DiscordButtonComponent(ButtonStyle.Success, BuildSaveCustomId(agentInputs, mapName ?? ""), "💾 Save to team"));
+        }
+
+        await ctx.EditResponseAsync(builder);
+    }
+
+    [SlashCommand("findmycomp", "Find pro teams using one of your own saved team comps")]
+    public async Task FindMyComp(
+        InteractionContext ctx,
+        [Option("team", "Your saved team name"), Autocomplete(typeof(TeamAutocompleteProvider))] string team,
+        [Option("map", "Map (optional - uses whichever map you saved a comp for if left blank)")] ProCompMap? map = null)
+    {
+        await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
+
+        var db = CompsCommands.LoadDatabase();
+        var requestedMap = map?.ToString();
+
+        List<string>? savedAgents = null;
+        string? savedMap = null;
+
+        if (requestedMap != null)
+        {
+            if (db.TryGetValue(requestedMap, out var teamsOnMap) && teamsOnMap.TryGetValue(team, out var agents))
+            {
+                savedAgents = agents;
+                savedMap = requestedMap;
+            }
+        }
+        else
+        {
+            var match = db.FirstOrDefault(kv => kv.Value.ContainsKey(team));
+            if (!EqualityComparer<KeyValuePair<string, Dictionary<string, List<string>>>>.Default.Equals(match, default))
+            {
+                savedMap = match.Key;
+                savedAgents = match.Value[team];
+            }
+        }
+
+        if (savedAgents is null || savedMap is null)
+        {
+            var mapPart = requestedMap != null ? $" on {requestedMap}" : "";
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder()
+                .WithContent($"No saved comp found for **{team}**{mapPart}. Use `/addcomp` first."));
+            return;
+        }
+
+        if (!File.Exists(DatabasePath))
+        {
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder()
+                .WithContent("No pro-comp database has been created yet. The server owner should run `/updateprocomps` first."));
+            return;
+        }
+
+        var queryAgents = savedAgents.ToArray();
+        var (scored, error) = await GetScoredComps(queryAgents, savedMap);
+
+        if (error is not null)
+        {
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent(error));
+            return;
+        }
+
+        if (scored.Count == 0)
+        {
+            await ctx.EditResponseAsync(new DiscordWebhookBuilder()
+                .WithContent($"No pro comps on {savedMap} are close to **{team}**'s saved comp ({string.Join(" / ", queryAgents)})."));
+            return;
+        }
+
+        var embed = BuildEmbed(scored, queryAgents, savedMap, InitialDisplayLimit);
+        var builder = new DiscordWebhookBuilder().AddEmbed(embed);
+
+        if (scored.Count > InitialDisplayLimit)
+        {
+            builder.AddComponents(new DiscordButtonComponent(
+                ButtonStyle.Secondary, BuildShowAllCustomId(queryAgents, savedMap), $"Show all {scored.Count}"));
         }
 
         await ctx.EditResponseAsync(builder);
@@ -408,6 +487,22 @@ public class AgentAutocompleteProvider : IAutocompleteProvider
             .OrderBy(agent => agent)
             .Take(25)
             .Select(agent => new DiscordAutoCompleteChoice(agent, agent));
+
+        return Task.FromResult(matches);
+    }
+}
+
+public class TeamAutocompleteProvider : IAutocompleteProvider
+{
+    public Task<IEnumerable<DiscordAutoCompleteChoice>> Provider(AutocompleteContext ctx)
+    {
+        var input = ctx.OptionValue?.ToString() ?? "";
+
+        var matches = CompsCommands.GetAllTeamNames()
+            .Where(team => team.Contains(input, StringComparison.OrdinalIgnoreCase))
+            .OrderBy(team => team)
+            .Take(25)
+            .Select(team => new DiscordAutoCompleteChoice(team, team));
 
         return Task.FromResult(matches);
     }

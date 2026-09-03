@@ -161,7 +161,7 @@ namespace AutoStrykeNew
                     return;
                 }
 
-                var embed = ProCompCommands.BuildEmbed(scored, queryAgents, mapName, scored.Count);
+                var embed = ProCompCommands.BuildEmbed(scored, queryAgents, string.IsNullOrWhiteSpace(mapName) ? "any map" : mapName, scored.Count);
 
                 // No components this time - the full list is now shown, so
                 // there's nothing left for the button to do.
