@@ -97,6 +97,16 @@ namespace AutoStrykeNew.Commands
             await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
         }
 
+        [Command("ski")]
+
+        //sends a document of best players to watch for each agent
+        public async Task ski(CommandContext ctx)
+        {
+            string response = @"ermmmm bend your legs and dont fall over and erm turn sometimes";
+
+            await ctx.Channel.SendMessageAsync(response).ConfigureAwait(false);
+        }
+
 
 
     }
