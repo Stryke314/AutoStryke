@@ -105,6 +105,13 @@ def get_team_stats(team_id, event_id):
 
 
 def update_database():
+    # Always start from a clean file. The scan below re-fetches everything
+    # from VLR regardless, so there's no incremental benefit to keeping the
+    # old database around - and this permanently avoids "no such column"
+    # errors whenever the schema changes.
+    if DATABASE_PATH.exists():
+        DATABASE_PATH.unlink()
+
     connection = create_database()
     rows_added = 0
 
