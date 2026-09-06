@@ -162,7 +162,7 @@ public class ProCompCommands : ApplicationCommandModule
         return $"Updating pro-comp database...\n{bar}\n**{done}/{total}** ({ratio:P0}) — {currentLabel}";
     }
 
-    public record ScoredComp(string Team, string Map, string Comp, List<string> Links, double Similarity);
+    public record ScoredComp(string Team, string Map, string Comp, List<string> Links, double Similarity, string Tier);
 
     /// <summary>
     /// Shared lookup used by /findprocomp, /findmycomp, and the "Show all"
@@ -176,13 +176,14 @@ public class ProCompCommands : ApplicationCommandModule
     ///   percentage is meaningful here, so Similarity is set to -1 as a
     ///   sentinel meaning "core match, don't show a percentage".
     ///
-    /// mapName null/empty means "search every map".
+    /// mapName null/empty means "search every map". VCT (tier 1) results
+    /// are always shown before VCL results, regardless of search mode.
     /// </summary>
     public static async Task<(List<ScoredComp> Scored, string? Error)> GetScoredComps(string[] queryAgents, string? mapName)
     {
         mapName = string.IsNullOrWhiteSpace(mapName) ? null : mapName;
 
-        var rows = new List<(string Team, string Map, string Comp, string MatchLink)>();
+        var rows = new List<(string Team, string Map, string Comp, string MatchLink, string Tier)>();
 
         try
         {
@@ -190,7 +191,7 @@ public class ProCompCommands : ApplicationCommandModule
             await connection.OpenAsync();
             await using var command = connection.CreateCommand();
             command.CommandText = """
-                SELECT team, map, comp, match_link
+                SELECT team, map, comp, match_link, tier
                 FROM compositions
                 WHERE ($map IS NULL OR lower(map) = lower($map))
                 """;
@@ -198,7 +199,9 @@ public class ProCompCommands : ApplicationCommandModule
 
             await using var reader = await command.ExecuteReaderAsync();
             while (await reader.ReadAsync())
-                rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? "" : reader.GetString(3)));
+                rows.Add((reader.GetString(0), reader.GetString(1), reader.GetString(2),
+                    reader.IsDBNull(3) ? "" : reader.GetString(3),
+                    reader.IsDBNull(4) ? "vcl" : reader.GetString(4)));
         }
         catch (Exception exception)
         {
@@ -216,6 +219,9 @@ public class ProCompCommands : ApplicationCommandModule
                 g.Key.Comp,
                 Links = g.Select(r => r.MatchLink).Where(l => !string.IsNullOrWhiteSpace(l)).Distinct().ToList(),
                 CompAgents = g.Key.Comp.Split(" / ", StringSplitOptions.None),
+                // A (team, map, comp) combo is always the same tier in
+                // practice, but if it somehow varied, prefer "vct".
+                Tier = g.Select(r => r.Tier).OrderBy(t => t == "vct" ? 0 : 1).First(),
             });
 
         List<ScoredComp> scored;
@@ -225,9 +231,10 @@ public class ProCompCommands : ApplicationCommandModule
             const double SimilarityThreshold = 0.4;
 
             scored = merged
-                .Select(c => new ScoredComp(c.Team, c.Map, c.Comp, c.Links, CompSimilarity.Compute(queryAgents, c.CompAgents)))
+                .Select(c => new ScoredComp(c.Team, c.Map, c.Comp, c.Links, CompSimilarity.Compute(queryAgents, c.CompAgents), c.Tier))
                 .Where(c => c.Similarity >= SimilarityThreshold)
-                .OrderByDescending(c => c.Similarity)
+                .OrderBy(c => c.Tier == "vct" ? 0 : 1)
+                .ThenByDescending(c => c.Similarity)
                 .ThenBy(c => c.Team)
                 .ToList();
         }
@@ -237,8 +244,9 @@ public class ProCompCommands : ApplicationCommandModule
             // regardless of what else is in it.
             scored = merged
                 .Where(c => queryAgents.All(a => c.CompAgents.Contains(a, StringComparer.OrdinalIgnoreCase)))
-                .Select(c => new ScoredComp(c.Team, c.Map, c.Comp, c.Links, -1))
-                .OrderBy(c => c.Team)
+                .Select(c => new ScoredComp(c.Team, c.Map, c.Comp, c.Links, -1, c.Tier))
+                .OrderBy(c => c.Tier == "vct" ? 0 : 1)
+                .ThenBy(c => c.Team)
                 .ThenBy(c => c.Map)
                 .ToList();
         }

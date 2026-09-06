@@ -1,7 +1,7 @@
 import sqlite3
 import time
 import json
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
 import vlrdevapi
@@ -11,6 +11,7 @@ VCT_REGIONS = ["americas", "emea", "pacific", "china"]
 VCL_REGION = "all"  # VCL isn't split into continents like VCT is
 DATABASE_PATH = Path(__file__).parent / "comps.db"
 REQUEST_DELAY = 0.05
+RECENCY_WINDOW_DAYS = 183  # roughly 6 months
 
 
 def create_database():
@@ -18,6 +19,7 @@ def create_database():
     connection.execute("""
         CREATE TABLE IF NOT EXISTS compositions (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
+            tier TEXT NOT NULL,
             team TEXT NOT NULL,
             map TEXT NOT NULL,
             comp TEXT NOT NULL,
@@ -32,8 +34,26 @@ def create_database():
     return connection
 
 
-def find_stage_2_events():
-    events = {}
+def is_recent(event):
+    """An event counts as recent if it started or ended within the
+    last ~6 months. Ongoing events (no end_date yet) count as recent
+    as long as they've started within the window."""
+    cutoff = date.today() - timedelta(days=RECENCY_WINDOW_DAYS)
+
+    reference_date = event.end_date or event.start_date
+    if reference_date is None:
+        return False
+
+    # The library uses year 2019 as a "no year present" sentinel - treat
+    # those as unknown/unreliable dates rather than genuinely ancient.
+    if reference_date.year < 2020:
+        return False
+
+    return reference_date >= cutoff
+
+
+def find_recent_events():
+    events = {}  # event.id -> (tier, event)
 
     for region in VCT_REGIONS:
         try:
@@ -43,19 +63,14 @@ def find_stage_2_events():
             continue
 
         for event in result.events:
-            name = event.name or ""
-            if event.id is not None and "2026" in name and "Stage 2" in name:
-                events[event.id] = event
+            if event.id is not None and is_recent(event):
+                events[event.id] = ("vct", event)
 
     try:
         result = vlrdevapi.event.list(tier="vcl", region=VCL_REGION, return_all=True)
         for event in result.events:
-            name = event.name or ""
-            if event.id is None or "2026" not in name:
-                continue
-            if "Stage 2" not in name and "Split 2" not in name:
-                continue
-            events[event.id] = event
+            if event.id is not None and is_recent(event):
+                events[event.id] = ("vcl", event)
     except Exception as error:
         print(f"Could not load VCL events: {error}")
 
@@ -81,7 +96,7 @@ def get_team_stats(team_id, event_id):
             team_id=team_id,
             event_id=event_id,
             agent_composition="detailed",
-            date_start=date(2026, 1, 1),
+            date_start=date.today() - timedelta(days=RECENCY_WINDOW_DAYS),
             date_end=date.today(),
         )
     except Exception as error:
@@ -94,21 +109,21 @@ def update_database():
     rows_added = 0
 
     print("Finding events...", flush=True)
-    events = find_stage_2_events()
+    events = find_recent_events()
 
     # Build the full work list up front so we know the true total
     # (team count varies wildly between events - some VCL qualifiers
     # have 70+ teams, others have 8), giving an accurate progress bar
     # instead of one that jumps unevenly per event.
     work_items = []
-    for event in events:
+    for tier, event in events:
         for team in get_event_teams(event.id):
-            work_items.append((event, team))
+            work_items.append((tier, event, team))
 
     total = len(work_items)
     print(f"TOTAL {total}", flush=True)
 
-    for done, (event, team) in enumerate(work_items, start=1):
+    for done, (tier, event, team) in enumerate(work_items, start=1):
 
         stats = get_team_stats(team.id, event.id)
 
@@ -124,18 +139,18 @@ def update_database():
 
                     if not matches:
                         cursor = connection.execute("""
-                            INSERT OR IGNORE INTO compositions (team, map, comp, match_link)
-                            VALUES (?, ?, ?, '')
-                        """, (team.name, map_stats.map_name, comp))
+                            INSERT OR IGNORE INTO compositions (tier, team, map, comp, match_link)
+                            VALUES (?, ?, ?, ?, '')
+                        """, (tier, team.name, map_stats.map_name, comp))
                         rows_added += cursor.rowcount
                         continue
 
                     for match in matches:
                         link = f"https://www.vlr.gg/{match.series_id}" if match.series_id else ""
                         cursor = connection.execute("""
-                            INSERT OR IGNORE INTO compositions (team, map, comp, match_link)
-                            VALUES (?, ?, ?, ?)
-                        """, (team.name, map_stats.map_name, comp, link))
+                            INSERT OR IGNORE INTO compositions (tier, team, map, comp, match_link)
+                            VALUES (?, ?, ?, ?, ?)
+                        """, (tier, team.name, map_stats.map_name, comp, link))
                         rows_added += cursor.rowcount
 
             connection.commit()
