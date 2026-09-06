@@ -36,18 +36,22 @@ def create_database():
 
 def is_recent(event):
     """An event counts as recent if it started or ended within the
-    last ~6 months. Ongoing events (no end_date yet) count as recent
-    as long as they've started within the window."""
-    cutoff = date.today() - timedelta(days=RECENCY_WINDOW_DAYS)
+    last ~6 months. Ongoing/upcoming events always count, since those
+    are obviously current regardless of what their dates say."""
+    if event.status in ("ongoing", "upcoming"):
+        return True
 
+    cutoff = date.today() - timedelta(days=RECENCY_WINDOW_DAYS)
     reference_date = event.end_date or event.start_date
+
     if reference_date is None:
         return False
 
-    # The library uses year 2019 as a "no year present" sentinel - treat
-    # those as unknown/unreliable dates rather than genuinely ancient.
+    # The library uses year 2019 as a "no year was shown on the page"
+    # sentinel - VLR omits the year specifically when it's the current
+    # year, so treat this as "this year", not as literally ancient.
     if reference_date.year < 2020:
-        return False
+        reference_date = reference_date.replace(year=date.today().year)
 
     return reference_date >= cutoff
 
