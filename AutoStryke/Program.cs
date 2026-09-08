@@ -103,9 +103,9 @@ namespace AutoStrykeNew
             {
                 if (e.Author.IsBot) return;
 
-                if (e.Author.Id == 791982380801327115)
+                if (e.Author.Id == 383588013323714560)
                 {
-                    var emoji = e.Guild.Emojis.Values.FirstOrDefault(x => x.Name == "benerd");
+                    var emoji = e.Guild.Emojis.Values.FirstOrDefault(x => x.Name == "nerd");
                     if (emoji != null)
                         await e.Message.CreateReactionAsync(emoji);
                     else
