@@ -138,6 +138,11 @@ def update_database():
 
         stats = get_team_stats(team.id, event.id)
 
+        maps_count = len(stats.maps or []) if stats else 0
+        comps_count = sum(len(m.compositions or []) for m in (stats.maps or [])) if stats else 0
+        print(f"  -> stats={'None' if stats is None else 'OK'}, maps={maps_count}, comps={comps_count}", flush=True)
+
+
         if stats is not None:
             for map_stats in stats.maps or []:
                 if not map_stats.map_name:
