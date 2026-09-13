@@ -65,7 +65,6 @@ MAJOR_VCL_KEYWORDS = [
 def is_major_vcl_league(event_name):
     return any(keyword in event_name for keyword in MAJOR_VCL_KEYWORDS)
 
-
 def find_recent_events():
     events = {}  # event.id -> (tier, event)
 
@@ -89,8 +88,11 @@ def find_recent_events():
     except Exception as error:
         print(f"Could not load VCL events: {error}")
 
-    return list(events.values())
+    print(f"Matched {len(events)} events:")
+    for tier, event in events.values():
+        print(f"  [{tier.upper()}] {event.name}")
 
+    return list(events.values())
 
 def get_event_teams(event_id):
     try:
