@@ -36,11 +36,7 @@ def create_database():
 
 def is_recent(event):
     """An event counts as recent if it started or ended within the
-    last ~6 months. Ongoing/upcoming events always count, since those
-    are obviously current regardless of what their dates say."""
-    if event.status in ("ongoing", "upcoming"):
-        return True
-
+    last ~6 months, based on its actual dates."""
     cutoff = date.today() - timedelta(days=RECENCY_WINDOW_DAYS)
     reference_date = event.end_date or event.start_date
 
@@ -54,6 +50,20 @@ def is_recent(event):
         reference_date = reference_date.replace(year=date.today().year)
 
     return reference_date >= cutoff
+
+
+MAJOR_VCL_KEYWORDS = [
+    "North America ACE",
+    "EMEA Stage",
+    "Brazil Gamers Club",
+    "Korea WDG",
+    "Japan Split",
+    "Japan Season Finals",
+]
+
+
+def is_major_vcl_league(event_name):
+    return any(keyword in event_name for keyword in MAJOR_VCL_KEYWORDS)
 
 
 def find_recent_events():
@@ -73,7 +83,8 @@ def find_recent_events():
     try:
         result = vlrdevapi.event.list(tier="vcl", region=VCL_REGION, return_all=True)
         for event in result.events:
-            if event.id is not None and is_recent(event):
+            name = event.name or ""
+            if event.id is not None and is_recent(event) and is_major_vcl_league(name):
                 events[event.id] = ("vcl", event)
     except Exception as error:
         print(f"Could not load VCL events: {error}")

@@ -98,7 +98,7 @@ namespace AutoStrykeNew
         {
             discordClient.Ready += Client_Ready;
 
-            // Reacts with the "benerd" emoji whenever a specific user posts.
+            // Reacts with the "nerd" emoji whenever a specific user posts.
             discordClient.MessageCreated += async (s, e) =>
             {
                 if (e.Author.IsBot) return;
