@@ -46,6 +46,7 @@ namespace AutoStrykeNew
             slash.RegisterCommands<slashcommandstest>();
             slash.RegisterCommands<CompsCommands>();
             slash.RegisterCommands<ProCompCommands>();
+            slash.RegisterCommands<KrillionCommands>();
 
             await client.ConnectAsync();
 
