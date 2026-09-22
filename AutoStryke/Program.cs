@@ -47,6 +47,7 @@ namespace AutoStrykeNew
             slash.RegisterCommands<CompsCommands>();
             slash.RegisterCommands<ProCompCommands>();
             slash.RegisterCommands<KrillionCommands>();
+            slash.RegisterCommands<FermiCommands>();
 
             await client.ConnectAsync();
 
