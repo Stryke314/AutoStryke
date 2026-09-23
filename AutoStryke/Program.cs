@@ -411,6 +411,47 @@ namespace AutoStrykeNew
                         .WithContent($"Updated **{team}** on **{map}**: {string.Join(" / ", agents)}")
                         .AsEphemeral(true));
             };
+
+            // Passively scans every message for a Krillion or Fermi share and
+            // auto-records it - no slash command needed. Reacts with ✅ when
+            // recorded, or 🔁 if that puzzle was already submitted by this user.
+            discordClient.MessageCreated += async (s, e) =>
+            {
+                if (e.Author.IsBot) return;
+
+                var krillionResult = KrillionStore.TryParse(e.Message.Content);
+                if (krillionResult is not null)
+                {
+                    var (puzzleNumber, score) = krillionResult.Value;
+
+                    if (KrillionStore.HasSubmitted(puzzleNumber, e.Author.Id))
+                    {
+                        await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("🔁"));
+                    }
+                    else
+                    {
+                        KrillionStore.RecordResult(puzzleNumber, e.Author.Id, e.Author.Username, score, e.Message.Content);
+                        await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("✅"));
+                    }
+                    return;
+                }
+
+                var fermiResult = FermiStore.TryParse(e.Message.Content);
+                if (fermiResult is not null)
+                {
+                    var (puzzleNumber, score) = fermiResult.Value;
+
+                    if (FermiStore.HasSubmitted(puzzleNumber, e.Author.Id))
+                    {
+                        await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("🔁"));
+                    }
+                    else
+                    {
+                        FermiStore.RecordResult(puzzleNumber, e.Author.Id, e.Author.Username, score, e.Message.Content);
+                        await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("✅"));
+                    }
+                }
+            };
         }
 
         private static Task Client_Ready(DiscordClient sender, ReadyEventArgs args)

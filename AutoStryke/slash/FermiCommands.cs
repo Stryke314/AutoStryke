@@ -13,6 +13,20 @@ public record FermiEntry(string Username, double Score, string RawShare, DateTim
 public static class FermiStore
 {
     private const string JsonFile = "fermi_results.json";
+    private static readonly Regex PuzzleNumberPattern = new(@"No\.\s*#?(\d+)", RegexOptions.IgnoreCase);
+    private static readonly Regex ScorePattern = new(@"([\d.]+)\s*[×xX]\s*score", RegexOptions.IgnoreCase);
+
+    /// <summary>Parses a raw message into (puzzleNumber, score), or null if it isn't a valid Fermi share.</summary>
+    public static (int PuzzleNumber, double Score)? TryParse(string text)
+    {
+        var puzzleMatch = PuzzleNumberPattern.Match(text);
+        var scoreMatch = ScorePattern.Match(text);
+
+        if (!puzzleMatch.Success || !scoreMatch.Success || !double.TryParse(scoreMatch.Groups[1].Value, out var score))
+            return null;
+
+        return (int.Parse(puzzleMatch.Groups[1].Value), score);
+    }
 
     // puzzleNumber -> (userId -> entry)
     public static Dictionary<int, Dictionary<ulong, FermiEntry>> Load()
@@ -30,6 +44,14 @@ public static class FermiStore
         File.WriteAllText(JsonFile, JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
     }
 
+    /// <summary>Returns true if this user has already submitted for this puzzle.</summary>
+    public static bool HasSubmitted(int puzzleNumber, ulong userId)
+    {
+        var data = Load();
+        return data.TryGetValue(puzzleNumber, out var entries) && entries.ContainsKey(userId);
+    }
+
+    /// <summary>Records a user's result for a given puzzle number. Does not check for duplicates - call HasSubmitted first.</summary>
     public static void RecordResult(int puzzleNumber, ulong userId, string username, double score, string rawShare)
     {
         var data = Load();
@@ -45,9 +67,6 @@ public static class FermiStore
 
 public class FermiCommands : ApplicationCommandModule
 {
-    private static readonly Regex PuzzleNumberPattern = new(@"No\.\s*#?(\d+)", RegexOptions.IgnoreCase);
-    private static readonly Regex ScorePattern = new(@"([\d.]+)\s*[×xX]\s*score", RegexOptions.IgnoreCase);
-
     public enum FermiScope
     {
         [ChoiceName("Today (latest puzzle)")] Today,
@@ -59,10 +78,9 @@ public class FermiCommands : ApplicationCommandModule
         InteractionContext ctx,
         [Option("result", "Paste your Fermi share text here")] string resultText)
     {
-        var puzzleMatch = PuzzleNumberPattern.Match(resultText);
-        var scoreMatch = ScorePattern.Match(resultText);
+        var parsed = FermiStore.TryParse(resultText);
 
-        if (!puzzleMatch.Success || !scoreMatch.Success || !double.TryParse(scoreMatch.Groups[1].Value, out var score))
+        if (parsed is null)
         {
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
@@ -71,14 +89,10 @@ public class FermiCommands : ApplicationCommandModule
             return;
         }
 
-        var puzzleNumber = int.Parse(puzzleMatch.Groups[1].Value);
+        var (puzzleNumber, score) = parsed.Value;
         var username = ctx.User.Username;
 
-        var existing = FermiStore.Load();
-        var alreadySubmitted = existing.TryGetValue(puzzleNumber, out var puzzleEntries)
-            && puzzleEntries.ContainsKey(ctx.User.Id);
-
-        if (alreadySubmitted)
+        if (FermiStore.HasSubmitted(puzzleNumber, ctx.User.Id))
         {
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()

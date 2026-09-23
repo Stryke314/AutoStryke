@@ -13,6 +13,26 @@ public record KrillionEntry(string Username, int Score, string RawShare, DateTim
 public static class KrillionStore
 {
     private const string JsonFile = "krillion_results.json";
+    private static readonly Regex PuzzleNumberPattern = new(@"Krillion\s*#(\d+)", RegexOptions.IgnoreCase);
+
+    /// <summary>Parses a raw message into (puzzleNumber, score), or null if it isn't a valid Krillion share.</summary>
+    public static (int PuzzleNumber, int Score)? TryParse(string text)
+    {
+        var puzzleMatch = PuzzleNumberPattern.Match(text);
+
+        var lines = text
+            .Split('\n')
+            .Select(l => l.Trim())
+            .Where(l => !string.IsNullOrWhiteSpace(l))
+            .ToList();
+
+        var scoreLine = lines.LastOrDefault(l => int.TryParse(l, out _));
+
+        if (!puzzleMatch.Success || scoreLine is null || !int.TryParse(scoreLine, out var score))
+            return null;
+
+        return (int.Parse(puzzleMatch.Groups[1].Value), score);
+    }
 
     // puzzleNumber -> (userId -> entry)
     public static Dictionary<int, Dictionary<ulong, KrillionEntry>> Load()
@@ -30,7 +50,14 @@ public static class KrillionStore
         File.WriteAllText(JsonFile, JsonSerializer.Serialize(data, new JsonSerializerOptions { WriteIndented = true }));
     }
 
-    /// <summary>Records or overwrites a user's result for a given puzzle number.</summary>
+    /// <summary>Returns true if this user has already submitted for this puzzle.</summary>
+    public static bool HasSubmitted(int puzzleNumber, ulong userId)
+    {
+        var data = Load();
+        return data.TryGetValue(puzzleNumber, out var entries) && entries.ContainsKey(userId);
+    }
+
+    /// <summary>Records a user's result for a given puzzle number. Does not check for duplicates - call HasSubmitted first.</summary>
     public static void RecordResult(int puzzleNumber, ulong userId, string username, int score, string rawShare)
     {
         var data = Load();
@@ -46,8 +73,6 @@ public static class KrillionStore
 
 public class KrillionCommands : ApplicationCommandModule
 {
-    private static readonly Regex PuzzleNumberPattern = new(@"Krillion\s*#(\d+)", RegexOptions.IgnoreCase);
-
     public enum KrillionScope
     {
         [ChoiceName("Today (latest puzzle)")] Today,
@@ -59,17 +84,9 @@ public class KrillionCommands : ApplicationCommandModule
         InteractionContext ctx,
         [Option("result", "Paste your Krillion share text here")] string resultText)
     {
-        var puzzleMatch = PuzzleNumberPattern.Match(resultText);
+        var parsed = KrillionStore.TryParse(resultText);
 
-        var lines = resultText
-            .Split('\n')
-            .Select(l => l.Trim())
-            .Where(l => !string.IsNullOrWhiteSpace(l))
-            .ToList();
-
-        var scoreLine = lines.LastOrDefault(l => int.TryParse(l, out _));
-
-        if (!puzzleMatch.Success || scoreLine is null || !int.TryParse(scoreLine, out var score))
+        if (parsed is null)
         {
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
@@ -78,14 +95,10 @@ public class KrillionCommands : ApplicationCommandModule
             return;
         }
 
-        var puzzleNumber = int.Parse(puzzleMatch.Groups[1].Value);
+        var (puzzleNumber, score) = parsed.Value;
         var username = ctx.User.Username;
 
-        var existing = KrillionStore.Load();
-        var alreadySubmitted = existing.TryGetValue(puzzleNumber, out var puzzleEntries)
-            && puzzleEntries.ContainsKey(ctx.User.Id);
-
-        if (alreadySubmitted)
+        if (KrillionStore.HasSubmitted(puzzleNumber, ctx.User.Id))
         {
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
