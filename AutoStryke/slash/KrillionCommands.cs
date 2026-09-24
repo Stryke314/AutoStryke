@@ -149,20 +149,22 @@ public class KrillionCommands : ApplicationCommandModule
         }
         else
         {
-            var totals = data
+            var stats = data
                 .SelectMany(puzzle => puzzle.Value.Select(entry => (entry.Key, entry.Value.Username, entry.Value.Score)))
                 .GroupBy(x => x.Key)
                 .Select(g => new
                 {
                     Username = g.First().Username,
-                    TotalScore = g.Sum(x => x.Score),
+                    BestScore = g.Max(x => x.Score),
+                    AverageScore = g.Average(x => x.Score),
                     DaysPlayed = g.Count(),
                 })
-                .OrderByDescending(x => x.TotalScore)
+                .OrderByDescending(x => x.BestScore)
+                .ThenByDescending(x => x.AverageScore)
                 .ToList();
 
-            var lines = totals.Select((t, i) =>
-                $"{Medal(i)} **{t.Username}** — {t.TotalScore} total ({t.DaysPlayed} day{(t.DaysPlayed == 1 ? "" : "s")})");
+            var lines = stats.Select((s, i) =>
+                $"{Medal(i)} **{s.Username}** — best {s.BestScore}, avg {s.AverageScore:0.##} ({s.DaysPlayed} day{(s.DaysPlayed == 1 ? "" : "s")})");
 
             embed = new DiscordEmbedBuilder()
                 .WithTitle("🦐 Krillion All-Time Leaderboard")

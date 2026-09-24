@@ -143,23 +143,22 @@ public class FermiCommands : ApplicationCommandModule
         }
         else
         {
-            // Average (not sum) across days played - these are multipliers,
-            // so someone who's played more days shouldn't be penalised just
-            // for having more entries added together.
-            var averages = data
+            var stats = data
                 .SelectMany(puzzle => puzzle.Value.Select(entry => (entry.Key, entry.Value.Username, entry.Value.Score)))
                 .GroupBy(x => x.Key)
                 .Select(g => new
                 {
                     Username = g.First().Username,
+                    BestScore = g.Min(x => x.Score), // lower multiplier = better for Fermi
                     AverageScore = g.Average(x => x.Score),
                     DaysPlayed = g.Count(),
                 })
-                .OrderBy(x => x.AverageScore) // lower average = better
+                .OrderBy(x => x.BestScore)
+                .ThenBy(x => x.AverageScore)
                 .ToList();
 
-            var lines = averages.Select((a, i) =>
-                $"{Medal(i)} **{a.Username}** — {a.AverageScore:0.##}× avg ({a.DaysPlayed} day{(a.DaysPlayed == 1 ? "" : "s")})");
+            var lines = stats.Select((s, i) =>
+                $"{Medal(i)} **{s.Username}** — best {s.BestScore:0.##}×, avg {s.AverageScore:0.##}× ({s.DaysPlayed} day{(s.DaysPlayed == 1 ? "" : "s")})");
 
             embed = new DiscordEmbedBuilder()
                 .WithTitle("🔢 Fermi All-Time Leaderboard")
