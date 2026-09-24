@@ -73,40 +73,8 @@ public class FermiCommands : ApplicationCommandModule
         [ChoiceName("All Time")] AllTime,
     }
 
-    [SlashCommand("fermi", "Submit your daily Fermi result (paste the full share text)")]
-    public async Task SubmitFermi(
-        InteractionContext ctx,
-        [Option("result", "Paste your Fermi share text here")] string resultText)
-    {
-        var parsed = FermiStore.TryParse(resultText);
 
-        if (parsed is null)
-        {
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent("That doesn't look like a Fermi share - paste the whole result, including the \"No. X\" line and the final \"...× score\" line.")
-                    .AsEphemeral(true));
-            return;
-        }
 
-        var (puzzleNumber, score) = parsed.Value;
-        var username = ctx.User.Username;
-
-        if (FermiStore.HasSubmitted(puzzleNumber, ctx.User.Id))
-        {
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent($"You've already submitted your result for Fermi No. {puzzleNumber} - only one submission per puzzle.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        FermiStore.RecordResult(puzzleNumber, ctx.User.Id, username, score, resultText);
-
-        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-            new DiscordInteractionResponseBuilder()
-                .WithContent($"🔢 Recorded **{username}**'s Fermi No. {puzzleNumber} result: **{score:0.##}×**"));
-    }
 
     [SlashCommand("fermiboard", "Show the Fermi leaderboard")]
     public async Task FermiLeaderboard(
@@ -134,11 +102,12 @@ public class FermiCommands : ApplicationCommandModule
                 .OrderBy(e => e.Score) // lower multiplier = better
                 .ToList();
 
-            var lines = entries.Select((e, i) => $"{Medal(i)} **{e.Username}** — {e.Score:0.##}×");
+            var rows = entries.Select((e, i) => new[] { $"{i + 1}.", e.Username, $"{e.Score:0.##}×" });
+            var table = BuildTable(new[] { "#", "Player", "Score" }, rows.ToList());
 
             embed = new DiscordEmbedBuilder()
                 .WithTitle($"🔢 Fermi No. {latestPuzzle} Leaderboard")
-                .WithDescription(string.Join("\n", lines))
+                .WithDescription(table)
                 .WithColor(DiscordColor.Cyan);
         }
         else
@@ -157,12 +126,15 @@ public class FermiCommands : ApplicationCommandModule
                 .ThenBy(x => x.AverageScore)
                 .ToList();
 
-            var lines = stats.Select((s, i) =>
-                $"{Medal(i)} **{s.Username}** — best {s.BestScore:0.##}×, avg {s.AverageScore:0.##}× ({s.DaysPlayed} day{(s.DaysPlayed == 1 ? "" : "s")})");
+            var rows = stats.Select((s, i) => new[]
+            {
+                $"{i + 1}.", s.Username, $"{s.BestScore:0.##}×", $"{s.AverageScore:0.##}×", s.DaysPlayed.ToString()
+            });
+            var table = BuildTable(new[] { "#", "Player", "Best", "Avg", "Days" }, rows.ToList());
 
             embed = new DiscordEmbedBuilder()
                 .WithTitle("🔢 Fermi All-Time Leaderboard")
-                .WithDescription(string.Join("\n", lines))
+                .WithDescription(table)
                 .WithColor(DiscordColor.Blurple);
         }
 
@@ -170,11 +142,26 @@ public class FermiCommands : ApplicationCommandModule
             new DiscordInteractionResponseBuilder().AddEmbed(embed));
     }
 
-    private static string Medal(int index) => index switch
+    /// <summary>Builds a monospace, column-aligned table wrapped in a code block.</summary>
+    private static string BuildTable(string[] headers, List<string[]> rows)
     {
-        0 => "🥇",
-        1 => "🥈",
-        2 => "🥉",
-        _ => $"`#{index + 1}`",
-    };
+        var columnCount = headers.Length;
+        var widths = new int[columnCount];
+
+        for (int c = 0; c < columnCount; c++)
+        {
+            widths[c] = headers[c].Length;
+            foreach (var row in rows)
+                widths[c] = Math.Max(widths[c], row[c].Length);
+        }
+
+        string PadRow(string[] cells) =>
+            string.Join("  ", cells.Select((cell, c) => cell.PadRight(widths[c])));
+
+        var lines = new List<string> { PadRow(headers), PadRow(headers.Select(h => new string('-', h.Length)).ToArray()) };
+        lines.AddRange(rows.Select(PadRow));
+
+        return "```\n" + string.Join("\n", lines) + "\n```";
+    }
+
 }

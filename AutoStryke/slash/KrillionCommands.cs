@@ -79,40 +79,6 @@ public class KrillionCommands : ApplicationCommandModule
         [ChoiceName("All Time")] AllTime,
     }
 
-    [SlashCommand("krillion", "Submit your daily Krillion result (paste the full share text)")]
-    public async Task SubmitKrillion(
-        InteractionContext ctx,
-        [Option("result", "Paste your Krillion share text here")] string resultText)
-    {
-        var parsed = KrillionStore.TryParse(resultText);
-
-        if (parsed is null)
-        {
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent("That doesn't look like a Krillion share - paste the whole result, starting with \"Krillion #...\" and ending with your score.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        var (puzzleNumber, score) = parsed.Value;
-        var username = ctx.User.Username;
-
-        if (KrillionStore.HasSubmitted(puzzleNumber, ctx.User.Id))
-        {
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent($"You've already submitted your result for Krillion #{puzzleNumber} - only one submission per puzzle.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        KrillionStore.RecordResult(puzzleNumber, ctx.User.Id, username, score, resultText);
-
-        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-            new DiscordInteractionResponseBuilder()
-                .WithContent($"🦐 Recorded **{username}**'s Krillion #{puzzleNumber} result: **{score}**"));
-    }
 
     [SlashCommand("krillionboard", "Show the Krillion leaderboard")]
     public async Task KrillionLeaderboard(
@@ -140,11 +106,12 @@ public class KrillionCommands : ApplicationCommandModule
                 .OrderByDescending(e => e.Score)
                 .ToList();
 
-            var lines = entries.Select((e, i) => $"{Medal(i)} **{e.Username}** — {e.Score}");
+            var rows = entries.Select((e, i) => new[] { $"{i + 1}.", e.Username, e.Score.ToString() });
+            var table = BuildTable(new[] { "#", "Player", "Score" }, rows.ToList());
 
             embed = new DiscordEmbedBuilder()
                 .WithTitle($"🦐 Krillion #{latestPuzzle} Leaderboard")
-                .WithDescription(string.Join("\n", lines))
+                .WithDescription(table)
                 .WithColor(DiscordColor.Cyan);
         }
         else
@@ -163,12 +130,15 @@ public class KrillionCommands : ApplicationCommandModule
                 .ThenByDescending(x => x.AverageScore)
                 .ToList();
 
-            var lines = stats.Select((s, i) =>
-                $"{Medal(i)} **{s.Username}** — best {s.BestScore}, avg {s.AverageScore:0.##} ({s.DaysPlayed} day{(s.DaysPlayed == 1 ? "" : "s")})");
+            var rows = stats.Select((s, i) => new[]
+            {
+                $"{i + 1}.", s.Username, s.BestScore.ToString(), $"{s.AverageScore:0.#}", s.DaysPlayed.ToString()
+            });
+            var table = BuildTable(new[] { "#", "Player", "Best", "Avg", "Days" }, rows.ToList());
 
             embed = new DiscordEmbedBuilder()
                 .WithTitle("🦐 Krillion All-Time Leaderboard")
-                .WithDescription(string.Join("\n", lines))
+                .WithDescription(table)
                 .WithColor(DiscordColor.Blurple);
         }
 
@@ -176,11 +146,26 @@ public class KrillionCommands : ApplicationCommandModule
             new DiscordInteractionResponseBuilder().AddEmbed(embed));
     }
 
-    private static string Medal(int index) => index switch
+    /// <summary>Builds a monospace, column-aligned table wrapped in a code block.</summary>
+    private static string BuildTable(string[] headers, List<string[]> rows)
     {
-        0 => "🥇",
-        1 => "🥈",
-        2 => "🥉",
-        _ => $"`#{index + 1}`",
-    };
+        var columnCount = headers.Length;
+        var widths = new int[columnCount];
+
+        for (int c = 0; c < columnCount; c++)
+        {
+            widths[c] = headers[c].Length;
+            foreach (var row in rows)
+                widths[c] = Math.Max(widths[c], row[c].Length);
+        }
+
+        string PadRow(string[] cells) =>
+            string.Join("  ", cells.Select((cell, c) => cell.PadRight(widths[c])));
+
+        var lines = new List<string> { PadRow(headers), PadRow(headers.Select(h => new string('-', h.Length)).ToArray()) };
+        lines.AddRange(rows.Select(PadRow));
+
+        return "```\n" + string.Join("\n", lines) + "\n```";
+    }
+
 }
