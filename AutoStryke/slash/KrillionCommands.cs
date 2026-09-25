@@ -79,6 +79,40 @@ public class KrillionCommands : ApplicationCommandModule
         [ChoiceName("All Time")] AllTime,
     }
 
+    [SlashCommand("krillion", "Submit your daily Krillion result (paste the full share text)")]
+    public async Task SubmitKrillion(
+        InteractionContext ctx,
+        [Option("result", "Paste your Krillion share text here")] string resultText)
+    {
+        var parsed = KrillionStore.TryParse(resultText);
+
+        if (parsed is null)
+        {
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent("That doesn't look like a Krillion share - paste the whole result, starting with \"Krillion #...\" and ending with your score.")
+                    .AsEphemeral(true));
+            return;
+        }
+
+        var (puzzleNumber, score) = parsed.Value;
+        var username = ctx.User.Username;
+
+        if (KrillionStore.HasSubmitted(puzzleNumber, ctx.User.Id))
+        {
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent($"You've already submitted your result for Krillion #{puzzleNumber} - only one submission per puzzle.")
+                    .AsEphemeral(true));
+            return;
+        }
+
+        KrillionStore.RecordResult(puzzleNumber, ctx.User.Id, username, score, resultText);
+
+        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+            new DiscordInteractionResponseBuilder()
+                .WithContent($"🦐 Recorded **{username}**'s Krillion #{puzzleNumber} result: **{score}**"));
+    }
 
     [SlashCommand("krillionboard", "Show the Krillion leaderboard")]
     public async Task KrillionLeaderboard(
@@ -126,8 +160,8 @@ public class KrillionCommands : ApplicationCommandModule
                     AverageScore = g.Average(x => x.Score),
                     DaysPlayed = g.Count(),
                 })
-                .OrderByDescending(x => x.BestScore)
-                .ThenByDescending(x => x.AverageScore)
+                .OrderByDescending(x => x.AverageScore)
+                .ThenByDescending(x => x.BestScore)
                 .ToList();
 
             var rows = stats.Select((s, i) => new[]
@@ -146,26 +180,109 @@ public class KrillionCommands : ApplicationCommandModule
             new DiscordInteractionResponseBuilder().AddEmbed(embed));
     }
 
-    /// <summary>Builds a monospace, column-aligned table wrapped in a code block.</summary>
-    private static string BuildTable(string[] headers, List<string[]> rows)
+    [SlashCommand("krillionstats", "View detailed Krillion statistics for yourself or someone else")]
+    public async Task KrillionStats(
+        InteractionContext ctx,
+        [Option("user", "Whose stats to view (defaults to you)")] DiscordUser? user = null)
     {
-        var columnCount = headers.Length;
-        var widths = new int[columnCount];
+        var target = user ?? ctx.User;
+        var data = KrillionStore.Load();
 
-        for (int c = 0; c < columnCount; c++)
+        var entries = data
+            .Where(kv => kv.Value.ContainsKey(target.Id))
+            .Select(kv => (Puzzle: kv.Key, Score: kv.Value[target.Id].Score))
+            .OrderBy(x => x.Puzzle)
+            .ToList();
+
+        if (entries.Count == 0)
         {
-            widths[c] = headers[c].Length;
-            foreach (var row in rows)
-                widths[c] = Math.Max(widths[c], row[c].Length);
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent($"**{target.Username}** hasn't submitted any Krillion results yet.")
+                    .AsEphemeral(true));
+            return;
         }
 
-        string PadRow(string[] cells) =>
-            string.Join("  ", cells.Select((cell, c) => cell.PadRight(widths[c])));
+        var scores = entries.Select(e => (double)e.Score).ToList();
+        var mean = scores.Average();
+        var median = Median(scores);
+        var mode = Mode(scores);
+        var stdDev = StdDev(scores, mean);
+        var best = scores.Max();
+        var worst = scores.Min();
 
-        var lines = new List<string> { PadRow(headers), PadRow(headers.Select(h => new string('-', h.Length)).ToArray()) };
-        lines.AddRange(rows.Select(PadRow));
+        var (currentStreak, longestStreak) = ComputeStreaks(entries.Select(e => e.Puzzle).ToList());
 
-        return "```\n" + string.Join("\n", lines) + "\n```";
+        var recentCount = Math.Min(5, scores.Count);
+        var recentAvg = scores.TakeLast(recentCount).Average();
+        var trendDiff = recentAvg - mean;
+        var trend = trendDiff > 5 ? "📈 Improving" : trendDiff < -5 ? "📉 Declining" : "➡️ Steady";
+
+        var allAverages = data
+            .SelectMany(p => p.Value.Select(e => (UserId: e.Key, e.Value.Score)))
+            .GroupBy(x => x.UserId)
+            .Select(g => (UserId: g.Key, Avg: g.Average(x => x.Score)))
+            .OrderByDescending(x => x.Avg)
+            .ToList();
+        var rank = allAverages.FindIndex(x => x.UserId == target.Id) + 1;
+
+        var embed = new DiscordEmbedBuilder()
+            .WithTitle($"🦐 {target.Username}'s Krillion Stats")
+            .WithColor(DiscordColor.Cyan)
+            .AddField("Days Played", scores.Count.ToString(), true)
+            .AddField("Best Score", best.ToString("0.#"), true)
+            .AddField("Worst Score", worst.ToString("0.#"), true)
+            .AddField("Mean", mean.ToString("0.##"), true)
+            .AddField("Median", median.ToString("0.##"), true)
+            .AddField("Mode", mode, true)
+            .AddField("Std Dev", stdDev.ToString("0.##"), true)
+            .AddField("Current Streak", $"{currentStreak} day{(currentStreak == 1 ? "" : "s")}", true)
+            .AddField("Longest Streak", $"{longestStreak} day{(longestStreak == 1 ? "" : "s")}", true)
+            .AddField("Recent Form", $"{trend} — last {recentCount}: {recentAvg:0.##} vs overall {mean:0.##}", false)
+            .AddField("Rank", $"#{rank} of {allAverages.Count} players (by average)", false);
+
+        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+            new DiscordInteractionResponseBuilder().AddEmbed(embed));
     }
 
-}
+    private static double Median(List<double> values)
+    {
+        var sorted = values.OrderBy(v => v).ToList();
+        int n = sorted.Count;
+        return n % 2 == 1 ? sorted[n / 2] : (sorted[n / 2 - 1] + sorted[n / 2]) / 2.0;
+    }
+
+    private static string Mode(List<double> values)
+    {
+        var groups = values.GroupBy(v => v).OrderByDescending(g => g.Count()).ToList();
+        var topCount = groups.First().Count();
+        if (topCount <= 1) return "No repeats";
+        return string.Join(", ", groups.Where(g => g.Count() == topCount).Select(g => g.Key.ToString("0.##")));
+    }
+
+    private static double StdDev(List<double> values, double mean)
+    {
+        if (values.Count < 2) return 0;
+        var sumSquares = values.Sum(v => (v - mean) * (v - mean));
+        return Math.Sqrt(sumSquares / (values.Count - 1));
+    }
+
+    /// <summary>Computes (current, longest) streaks of consecutive puzzle numbers from a sorted-ascending list.</summary>
+    private static (int Current, int Longest) ComputeStreaks(List<int> puzzleNumbers)
+    {
+        if (puzzleNumbers.Count == 0) return (0, 0);
+
+        int longest = 1, current = 1;
+        for (int i = 1; i < puzzleNumbers.Count; i++)
+        {
+            if (puzzleNumbers[i] == puzzleNumbers[i - 1] + 1)
+                current++;
+            else
+            {
+                longest = Math.Max(longest, current);
+                current = 1;
+            }
+        }
+        longest = Math.Max(longest, current);
+        return (current, longest);
+    }

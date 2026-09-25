@@ -73,8 +73,40 @@ public class FermiCommands : ApplicationCommandModule
         [ChoiceName("All Time")] AllTime,
     }
 
+    [SlashCommand("fermi", "Submit your daily Fermi result (paste the full share text)")]
+    public async Task SubmitFermi(
+        InteractionContext ctx,
+        [Option("result", "Paste your Fermi share text here")] string resultText)
+    {
+        var parsed = FermiStore.TryParse(resultText);
 
+        if (parsed is null)
+        {
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent("That doesn't look like a Fermi share - paste the whole result, including the \"No. X\" line and the final \"...× score\" line.")
+                    .AsEphemeral(true));
+            return;
+        }
 
+        var (puzzleNumber, score) = parsed.Value;
+        var username = ctx.User.Username;
+
+        if (FermiStore.HasSubmitted(puzzleNumber, ctx.User.Id))
+        {
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent($"You've already submitted your result for Fermi No. {puzzleNumber} - only one submission per puzzle.")
+                    .AsEphemeral(true));
+            return;
+        }
+
+        FermiStore.RecordResult(puzzleNumber, ctx.User.Id, username, score, resultText);
+
+        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+            new DiscordInteractionResponseBuilder()
+                .WithContent($"🔢 Recorded **{username}**'s Fermi No. {puzzleNumber} result: **{score:0.##}×**"));
+    }
 
     [SlashCommand("fermiboard", "Show the Fermi leaderboard")]
     public async Task FermiLeaderboard(
@@ -122,8 +154,8 @@ public class FermiCommands : ApplicationCommandModule
                     AverageScore = g.Average(x => x.Score),
                     DaysPlayed = g.Count(),
                 })
-                .OrderBy(x => x.BestScore)
-                .ThenBy(x => x.AverageScore)
+                .OrderBy(x => x.AverageScore)
+                .ThenBy(x => x.BestScore)
                 .ToList();
 
             var rows = stats.Select((s, i) => new[]
@@ -163,5 +195,3 @@ public class FermiCommands : ApplicationCommandModule
 
         return "```\n" + string.Join("\n", lines) + "\n```";
     }
-
-}
