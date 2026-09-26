@@ -286,3 +286,26 @@ public class KrillionCommands : ApplicationCommandModule
         longest = Math.Max(longest, current);
         return (current, longest);
     }
+
+    /// <summary>Builds a monospace, column-aligned table wrapped in a code block.</summary>
+    private static string BuildTable(string[] headers, List<string[]> rows)
+    {
+        var columnCount = headers.Length;
+        var widths = new int[columnCount];
+
+        for (int c = 0; c < columnCount; c++)
+        {
+            widths[c] = headers[c].Length;
+            foreach (var row in rows)
+                widths[c] = Math.Max(widths[c], row[c].Length);
+        }
+
+        string PadRow(string[] cells) =>
+            string.Join("  ", cells.Select((cell, c) => cell.PadRight(widths[c])));
+
+        var lines = new List<string> { PadRow(headers), PadRow(headers.Select(h => new string('-', h.Length)).ToArray()) };
+        lines.AddRange(rows.Select(PadRow));
+
+        return "```\n" + string.Join("\n", lines) + "\n```";
+    }
+}
