@@ -573,23 +573,39 @@ namespace AutoStrykeNew
         private const string matchResultsFilePath = "matchResults.json";
         private const string scheduleFilePath = "schedule.json";
 
+        private static string GetMatchResultsFilePath()
+        {
+            var configPaths = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, "matchResults.json"),
+                Path.Combine(Directory.GetCurrentDirectory(), "matchResults.json"),
+                Path.Combine(AppContext.BaseDirectory, "config", "matchResults.json"),
+                Path.Combine(Directory.GetCurrentDirectory(), "config", "matchResults.json"),
+            };
+
+            return configPaths.FirstOrDefault(File.Exists) ?? matchResultsFilePath;
+        }
+
         public static void SaveMatchResults(List<MatchResult> results)
         {
+            var filePath = GetMatchResultsFilePath();
             var json = JsonConvert.SerializeObject(results, Formatting.Indented);
-            File.WriteAllText(matchResultsFilePath, json);
+            File.WriteAllText(filePath, json);
+            Console.WriteLine($"[MATCHRESULTS] Saved match results to: {filePath}");
         }
 
         public static List<MatchResult> LoadMatchResults()
         {
-            Console.WriteLine($"[MATCHRESULTS] Attempting to load match results from: {matchResultsFilePath}");
+            var filePath = GetMatchResultsFilePath();
+            Console.WriteLine($"[MATCHRESULTS] Attempting to load match results from: {filePath}");
             
-            if (!File.Exists(matchResultsFilePath))
+            if (!File.Exists(filePath))
             {
                 Console.WriteLine("[MATCHRESULTS] File does not exist - returning empty list");
                 return new();
             }
 
-            var json = File.ReadAllText(matchResultsFilePath);
+            var json = File.ReadAllText(filePath);
             Console.WriteLine($"[MATCHRESULTS] File loaded successfully, content length: {json.Length}");
             
             var results = JsonConvert.DeserializeObject<List<MatchResult>>(json) ?? new();

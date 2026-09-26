@@ -5,7 +5,9 @@ using System.IO;
 using System.Linq;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reflection;
 using System.Threading.Tasks;
+using System.Runtime;
 
 namespace AutoStrykeNew
 {
@@ -18,6 +20,19 @@ namespace AutoStrykeNew
     {
         private const string SeenMatchesFile = "premier_seen_matches.json";
         private static readonly HttpClient Http = new HttpClient { BaseAddress = new Uri("https://api.henrikdev.xyz") };
+
+        private static string GetSeenMatchesFilePath()
+        {
+            var configPaths = new[]
+            {
+                Path.Combine(AppContext.BaseDirectory, SeenMatchesFile),
+                Path.Combine(Directory.GetCurrentDirectory(), SeenMatchesFile),
+                Path.Combine(AppContext.BaseDirectory, "config", SeenMatchesFile),
+                Path.Combine(Directory.GetCurrentDirectory(), "config", SeenMatchesFile),
+            };
+
+            return configPaths.FirstOrDefault(File.Exists) ?? Path.Combine(Directory.GetCurrentDirectory(), SeenMatchesFile);
+        }
 
         private class PremierTeamResponse
         {
@@ -217,16 +232,18 @@ namespace AutoStrykeNew
 
         private static HashSet<string> LoadSeenMatchIds()
         {
-            if (!File.Exists(SeenMatchesFile))
+            var filePath = GetSeenMatchesFilePath();
+            if (!File.Exists(filePath))
                 return new HashSet<string>();
 
-            var json = File.ReadAllText(SeenMatchesFile);
+            var json = File.ReadAllText(filePath);
             return JsonConvert.DeserializeObject<HashSet<string>>(json) ?? new HashSet<string>();
         }
 
         private static void SaveSeenMatchIds(HashSet<string> ids)
         {
-            File.WriteAllText(SeenMatchesFile, JsonConvert.SerializeObject(ids, Formatting.Indented));
+            var filePath = GetSeenMatchesFilePath();
+            File.WriteAllText(filePath, JsonConvert.SerializeObject(ids, Formatting.Indented));
         }
     }
 }
