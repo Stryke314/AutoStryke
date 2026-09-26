@@ -1,23 +1,51 @@
 [
   {
-    "Opponent": "Test Team 1",
-    "Map": "Ascent",
+    "Opponent": "R6G",
+    "Map": "Split",
     "OurScore": 13,
-    "TheirScore": 7,
-    "Date": "2024-01-15T20:30:00"
+    "TheirScore": 6,
+    "Date": "2024-09-17T20:00:00"
   },
   {
-    "Opponent": "Test Team 2", 
+    "Opponent": "Team",
+    "Map": "Ascent",
+    "OurScore": 12,
+    "TheirScore": 14,
+    "Date": "2024-09-12T20:00:00"
+  },
+  {
+    "Opponent": "Team",
     "Map": "Bind",
+    "OurScore": 13,
+    "TheirScore": 11,
+    "Date": "2024-09-10T20:00:00"
+  },
+  {
+    "Opponent": "Team",
+    "Map": "Lotus",
+    "OurScore": 10,
+    "TheirScore": 13,
+    "Date": "2024-09-03T20:00:00"
+  },
+  {
+    "Opponent": "Team",
+    "Map": "Pearl",
     "OurScore": 11,
     "TheirScore": 13,
-    "Date": "2024-01-16T21:00:00"
+    "Date": "2024-08-27T20:00:00"
   },
   {
-    "Opponent": "Test Team 3",
+    "Opponent": "Team",
     "Map": "Haven",
     "OurScore": 13,
-    "TheirScore": 5,
-    "Date": "2024-01-17T19:45:00"
+    "TheirScore": 11,
+    "Date": "2024-08-24T20:00:00"
+  },
+  {
+    "Opponent": "Team",
+    "Map": "Split",
+    "OurScore": 13,
+    "TheirScore": 4,
+    "Date": "2024-08-20T20:00:00"
   }
 ]
