@@ -1,0 +1,23 @@
+[
+  {
+    "Opponent": "Test Team 1",
+    "Map": "Ascent",
+    "OurScore": 13,
+    "TheirScore": 7,
+    "Date": "2024-01-15T20:30:00"
+  },
+  {
+    "Opponent": "Test Team 2", 
+    "Map": "Bind",
+    "OurScore": 11,
+    "TheirScore": 13,
+    "Date": "2024-01-16T21:00:00"
+  },
+  {
+    "Opponent": "Test Team 3",
+    "Map": "Haven",
+    "OurScore": 13,
+    "TheirScore": 5,
+    "Date": "2024-01-17T19:45:00"
+  }
+]
