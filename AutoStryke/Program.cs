@@ -581,11 +581,21 @@ namespace AutoStrykeNew
 
         public static List<MatchResult> LoadMatchResults()
         {
+            Console.WriteLine($"[MATCHRESULTS] Attempting to load match results from: {matchResultsFilePath}");
+            
             if (!File.Exists(matchResultsFilePath))
+            {
+                Console.WriteLine("[MATCHRESULTS] File does not exist - returning empty list");
                 return new();
+            }
 
             var json = File.ReadAllText(matchResultsFilePath);
-            return JsonConvert.DeserializeObject<List<MatchResult>>(json) ?? new();
+            Console.WriteLine($"[MATCHRESULTS] File loaded successfully, content length: {json.Length}");
+            
+            var results = JsonConvert.DeserializeObject<List<MatchResult>>(json) ?? new();
+            Console.WriteLine($"[MATCHRESULTS] Deserialized {results.Count} match results");
+            
+            return results;
         }
 
         public static List<ScheduleEntry> LoadSchedule()

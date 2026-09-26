@@ -278,17 +278,21 @@ namespace AutoStryke.slash
         [SlashCommand("matchresults", "View previous match results.")]
         public async Task MatchResults(InteractionContext ctx)
         {
+            Console.WriteLine($"[MATCHRESULTS] /matchresults command executed by {ctx.User.Username}");
             await ctx.CreateResponseAsync(InteractionResponseType.DeferredChannelMessageWithSource);
 
             var results = Program.LoadMatchResults();
+            Console.WriteLine($"[MATCHRESULTS] Loaded {results?.Count ?? 0} match results from file");
 
             if (results == null || results.Count == 0)
             {
+                Console.WriteLine("[MATCHRESULTS] No results found - displaying 'no results' message");
                 await ctx.EditResponseAsync(new DiscordWebhookBuilder().WithContent("❌ No match results have been submitted yet."));
                 return;
             }
 
             var latestResults = results.OrderByDescending(r => r.Date).Take(5);
+            Console.WriteLine($"[MATCHRESULTS] Displaying {latestResults.Count()} most recent results");
 
             var embed = new DiscordEmbedBuilder()
                 .WithTitle("📊 Recent Match Results")
@@ -303,6 +307,7 @@ namespace AutoStryke.slash
             }
 
             await ctx.EditResponseAsync(new DiscordWebhookBuilder().AddEmbed(embed));
+            Console.WriteLine("[MATCHRESULTS] Successfully displayed match results");
         }
     }
 }
