@@ -75,34 +75,53 @@ namespace AutoStrykeNew
         public static async Task<int> CheckForNewResults(
             string apiKey, string teamName, string teamTag, string region)
         {
+            Console.WriteLine($"[PREMIER] Starting Premier poll check for {teamName}#{teamTag} in {region}");
+            
             if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(teamName))
+            {
+                Console.WriteLine("[PREMIER] Premier polling not configured - skipping");
                 return 0; // Premier polling not configured - skip quietly.
+            }
 
             Http.DefaultRequestHeaders.Authorization = null;
             Http.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", apiKey);
 
+            Console.WriteLine($"[PREMIER] Fetching team ID for {teamName}#{teamTag}");
             var teamResponse = await GetJson<PremierTeamResponse>(
                 $"/valorant/v1/premier/{Uri.EscapeDataString(teamName)}/{Uri.EscapeDataString(teamTag)}");
 
             var teamId = teamResponse?.data?.id;
             if (string.IsNullOrWhiteSpace(teamId))
+            {
+                Console.WriteLine($"[PREMIER] Could not find team ID for {teamName}#{teamTag}");
                 return 0;
+            }
+            
+            Console.WriteLine($"[PREMIER] Found team ID: {teamId}");
 
+            Console.WriteLine($"[PREMIER] Fetching match history for team {teamId}");
             var history = await GetJson<PremierHistoryResponse>(
                 $"/valorant/v1/premier/{teamId}/history");
 
             var matches = history?.data?.league_matches ?? new List<PremierLeagueMatch>();
+            Console.WriteLine($"[PREMIER] Found {matches.Count} total matches in history");
+            
             var seenIds = LoadSeenMatchIds();
             var newMatches = matches.Where(m => !seenIds.Contains(m.id)).ToList();
+            Console.WriteLine($"[PREMIER] Found {newMatches.Count} new matches to process");
 
             if (newMatches.Count == 0)
+            {
+                Console.WriteLine("[PREMIER] No new matches to record");
                 return 0;
+            }
 
             var results = Program.LoadMatchResults();
             int added = 0;
 
             foreach (var match in newMatches)
             {
+                Console.WriteLine($"[PREMIER] Processing match {match.id} from {match.started_at}");
                 var detail = await GetJson<MatchDetailResponse>(
                     $"/valorant/v4/match/{region}/pc/{match.id}");
 
@@ -111,6 +130,7 @@ namespace AutoStrykeNew
                     // Couldn't fetch detail (maybe not ready yet) - mark as seen
                     // anyway using the points delta so it isn't retried forever,
                     // but skip adding a detailed result for it.
+                    Console.WriteLine($"[PREMIER] Could not fetch details for match {match.id} - marking as seen");
                     seenIds.Add(match.id);
                     continue;
                 }
@@ -120,11 +140,13 @@ namespace AutoStrykeNew
 
                 if (ourTeam is null || theirTeam is null)
                 {
+                    Console.WriteLine($"[PREMIER] Could not identify teams in match {match.id}");
                     seenIds.Add(match.id);
                     continue;
                 }
 
                 var opponentName = await ResolveTeamName(theirTeam.team_id) ?? "Premier opponent";
+                Console.WriteLine($"[PREMIER] Match details: {opponentName} on {detail.data.metadata?.map}, Score: {ourTeam.rounds_won}-{theirTeam.rounds_won}");
 
                 results.Add(new Program.MatchResult
                 {
@@ -137,12 +159,17 @@ namespace AutoStrykeNew
 
                 seenIds.Add(match.id);
                 added++;
+                Console.WriteLine($"[PREMIER] Successfully recorded match {match.id}");
             }
 
             if (added > 0)
+            {
                 Program.SaveMatchResults(results);
+                Console.WriteLine($"[PREMIER] Saved {added} new match results to matchResults.json");
+            }
 
             SaveSeenMatchIds(seenIds);
+            Console.WriteLine($"[PREMIER] Updated seen matches file with {seenIds.Count} total matches");
             return added;
         }
 

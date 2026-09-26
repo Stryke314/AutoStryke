@@ -84,10 +84,12 @@ public class KrillionCommands : ApplicationCommandModule
         InteractionContext ctx,
         [Option("result", "Paste your Krillion share text here")] string resultText)
     {
+        Console.WriteLine($"[KRILLION] /krillion command executed by {ctx.User.Username} (ID: {ctx.User.Id})");
         var parsed = KrillionStore.TryParse(resultText);
 
         if (parsed is null)
         {
+            Console.WriteLine($"[KRILLION] Invalid Krillion share format from {ctx.User.Username}");
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
                     .WithContent("That doesn't look like a Krillion share - paste the whole result, starting with \"Krillion #...\" and ending with your score.")
@@ -97,9 +99,11 @@ public class KrillionCommands : ApplicationCommandModule
 
         var (puzzleNumber, score) = parsed.Value;
         var username = ctx.User.Username;
+        Console.WriteLine($"[KRILLION] Parsed: Krillion #{puzzleNumber}, Score: {score}");
 
         if (KrillionStore.HasSubmitted(puzzleNumber, ctx.User.Id))
         {
+            Console.WriteLine($"[KRILLION] Duplicate submission attempt for Krillion #{puzzleNumber} by {username}");
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
                     .WithContent($"You've already submitted your result for Krillion #{puzzleNumber} - only one submission per puzzle.")
@@ -108,6 +112,7 @@ public class KrillionCommands : ApplicationCommandModule
         }
 
         KrillionStore.RecordResult(puzzleNumber, ctx.User.Id, username, score, resultText);
+        Console.WriteLine($"[KRILLION] Successfully recorded Krillion #{puzzleNumber} result for {username}: {score}");
 
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
             new DiscordInteractionResponseBuilder()
@@ -119,6 +124,7 @@ public class KrillionCommands : ApplicationCommandModule
         InteractionContext ctx,
         [Option("scope", "Today's puzzle, or all-time totals")] KrillionScope scope = KrillionScope.Today)
     {
+        Console.WriteLine($"[KRILLION] /krillionboard command executed by {ctx.User.Username}, scope: {scope}");
         var data = KrillionStore.Load();
 
         if (data.Count == 0)
@@ -185,7 +191,9 @@ public class KrillionCommands : ApplicationCommandModule
         InteractionContext ctx,
         [Option("user", "Whose stats to view (defaults to you)")] DiscordUser? user = null)
     {
+        Console.WriteLine($"[KRILLION] /krillionstats command executed by {ctx.User.Username}");
         var target = user ?? ctx.User;
+        Console.WriteLine($"[KRILLION] Viewing stats for: {target.Username}");
         var data = KrillionStore.Load();
 
         var entries = data

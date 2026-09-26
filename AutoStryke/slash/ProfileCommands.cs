@@ -42,7 +42,9 @@ namespace AutoStryke.slash
             InteractionContext ctx,
             [Option("user", "Whose profile to view (defaults to you)")] DiscordUser? user = null)
         {
+            Console.WriteLine($"[PROFILE] /profile command executed by {ctx.User.Username} (ID: {ctx.User.Id})");
             var target = user ?? ctx.User;
+            Console.WriteLine($"[PROFILE] Viewing profile for: {target.Username} (ID: {target.Id})");
             
             var krillionData = LoadKrillionData();
             var fermiData = LoadFermiData();
@@ -64,6 +66,7 @@ namespace AutoStryke.slash
 
             if (!hasKrillion && !hasFermi)
             {
+                Console.WriteLine($"[PROFILE] No game results found for {target.Username}");
                 await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                     new DiscordInteractionResponseBuilder()
                         .WithContent($"**{target.Username}** hasn't submitted any game results yet. Use `/krillion` or `/fermi` to get started!")
@@ -170,6 +173,7 @@ namespace AutoStryke.slash
 
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder().AddEmbed(embed));
+            Console.WriteLine($"[PROFILE] Successfully displayed profile for {target.Username}");
         }
 
         /// <summary>Computes (current, longest) streaks of consecutive puzzle numbers from a sorted-ascending list.</summary>

@@ -29,18 +29,26 @@ namespace AutoStrykeNew
 
         static async Task Main(string[] args)
         {
+            Console.WriteLine("========================================");
+            Console.WriteLine("Starting AutoStryke Discord Bot...");
+            Console.WriteLine("========================================");
+            
             var jsonreader = new jsonreader();
             await jsonreader.ReadJSON();
+            Console.WriteLine("[STARTUP] Configuration loaded successfully");
 
             ProCompCommands.PythonInterpreter = jsonreader.pythonInterpreter;
 
             client = BuildClient(jsonreader);
+            Console.WriteLine("[STARTUP] Discord client built");
 
             RegisterEventHandlers(client);
             RegisterBackgroundTasks();
+            Console.WriteLine("[STARTUP] Event handlers and background tasks registered");
 
             var commandsNext = client.UseCommandsNext(BuildCommandsNextConfig(jsonreader));
             commandsNext.RegisterCommands<Commands.Commands>();
+            Console.WriteLine("[STARTUP] Prefix commands registered");
 
             var slash = client.UseSlashCommands();
             slash.RegisterCommands<slashcommandstest>();
@@ -49,7 +57,9 @@ namespace AutoStrykeNew
             slash.RegisterCommands<KrillionCommands>();
             slash.RegisterCommands<FermiCommands>();
             slash.RegisterCommands<ProfileCommands>();
+            Console.WriteLine("[STARTUP] Slash commands registered");
 
+            Console.WriteLine("[STARTUP] Connecting to Discord...");
             await client.ConnectAsync();
 
             // ONE-TIME CLEANUP: clears leftover guild-scoped commands from
@@ -58,6 +68,30 @@ namespace AutoStrykeNew
             await client.BulkOverwriteGuildApplicationCommandsAsync(
                 1538210640420802662, Array.Empty<DiscordApplicationCommand>());
             Console.WriteLine("Cleared guild-scoped commands for the test server.");
+
+            // Initial Premier check on startup to catch any matches that completed while bot was offline
+            Console.WriteLine("[STARTUP] Running initial Premier check to catch any missed matches...");
+            try
+            {
+                var initialAdded = await PremierResultsPoller.CheckForNewResults(
+                    jsonreader.henrikApiKey,
+                    jsonreader.premierTeamName,
+                    jsonreader.premierTeamTag,
+                    jsonreader.premierRegion);
+
+                if (initialAdded > 0)
+                    Console.WriteLine($"[STARTUP] Initial Premier check completed: Added {initialAdded} new match result(s)");
+                else
+                    Console.WriteLine("[STARTUP] Initial Premier check completed: No new matches found");
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[STARTUP] Initial Premier check failed: {ex.Message}");
+            }
+
+            Console.WriteLine("========================================");
+            Console.WriteLine("Bot is running! Press Ctrl+C to stop.");
+            Console.WriteLine("========================================");
 
             await Task.Delay(-1);
         }
@@ -424,14 +458,17 @@ namespace AutoStrykeNew
                 if (krillionResult is not null)
                 {
                     var (puzzleNumber, score) = krillionResult.Value;
+                    Console.WriteLine($"[AUTO-DETECT] Detected Krillion share from {e.Author.Username}: Krillion #{puzzleNumber}, Score: {score}");
 
                     if (KrillionStore.HasSubmitted(puzzleNumber, e.Author.Id))
                     {
+                        Console.WriteLine($"[AUTO-DETECT] Duplicate Krillion submission from {e.Author.Username} for #{puzzleNumber}");
                         await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("🔁"));
                     }
                     else
                     {
                         KrillionStore.RecordResult(puzzleNumber, e.Author.Id, e.Author.Username, score, e.Message.Content);
+                        Console.WriteLine($"[AUTO-DETECT] Auto-recorded Krillion #{puzzleNumber} for {e.Author.Username}: {score}");
                         await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("✅"));
                     }
                     return;
@@ -441,14 +478,17 @@ namespace AutoStrykeNew
                 if (fermiResult is not null)
                 {
                     var (puzzleNumber, score) = fermiResult.Value;
+                    Console.WriteLine($"[AUTO-DETECT] Detected Fermi share from {e.Author.Username}: Fermi No. {puzzleNumber}, Score: {score:0.##}×");
 
                     if (FermiStore.HasSubmitted(puzzleNumber, e.Author.Id))
                     {
+                        Console.WriteLine($"[AUTO-DETECT] Duplicate Fermi submission from {e.Author.Username} for No. {puzzleNumber}");
                         await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("🔁"));
                     }
                     else
                     {
                         FermiStore.RecordResult(puzzleNumber, e.Author.Id, e.Author.Username, score, e.Message.Content);
+                        Console.WriteLine($"[AUTO-DETECT] Auto-recorded Fermi No. {puzzleNumber} for {e.Author.Username}: {score:0.##}×");
                         await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("✅"));
                     }
                 }
@@ -457,16 +497,20 @@ namespace AutoStrykeNew
 
         private static Task Client_Ready(DiscordClient sender, ReadyEventArgs args)
         {
-            Console.WriteLine("Bot is ready");
+            Console.WriteLine($"[STARTUP] Bot is ready! Connected as {sender.CurrentUser.Username}#{sender.CurrentUser.Discriminator}");
+            Console.WriteLine($"[STARTUP] Connected to {sender.Guilds.Count} guild(s)");
             return Task.CompletedTask;
         }
 
         private static void RegisterBackgroundTasks()
         {
+            Console.WriteLine("[STARTUP] Starting background tasks...");
+
             // Every 5 minutes, check whether any scheduled matches have just
             // ended and need a "submit result" prompt posted.
             _ = Task.Run(async () =>
             {
+                Console.WriteLine("[BACKGROUND] Match result prompt checker started (runs every 5 minutes)");
                 while (true)
                 {
                     await CheckForResultPrompts();
@@ -481,6 +525,7 @@ namespace AutoStrykeNew
                 var jsonreader = new jsonreader();
                 await jsonreader.ReadJSON();
 
+                Console.WriteLine("[BACKGROUND] Premier poller started (runs every 10 minutes)");
                 while (true)
                 {
                     try
@@ -492,11 +537,11 @@ namespace AutoStrykeNew
                             jsonreader.premierRegion);
 
                         if (added > 0)
-                            Console.WriteLine($"Added {added} new Premier result(s).");
+                            Console.WriteLine($"[BACKGROUND] Added {added} new Premier result(s).");
                     }
                     catch (Exception ex)
                     {
-                        Console.WriteLine($"Premier polling failed: {ex.Message}");
+                        Console.WriteLine($"[BACKGROUND] Premier polling failed: {ex.Message}");
                     }
 
                     await Task.Delay(TimeSpan.FromMinutes(10));

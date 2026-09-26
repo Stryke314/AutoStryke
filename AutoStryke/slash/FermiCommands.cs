@@ -78,10 +78,12 @@ public class FermiCommands : ApplicationCommandModule
         InteractionContext ctx,
         [Option("result", "Paste your Fermi share text here")] string resultText)
     {
+        Console.WriteLine($"[FERMI] /fermi command executed by {ctx.User.Username} (ID: {ctx.User.Id})");
         var parsed = FermiStore.TryParse(resultText);
 
         if (parsed is null)
         {
+            Console.WriteLine($"[FERMI] Invalid Fermi share format from {ctx.User.Username}");
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
                     .WithContent("That doesn't look like a Fermi share - paste the whole result, including the \"No. X\" line and the final \"...× score\" line.")
@@ -91,9 +93,11 @@ public class FermiCommands : ApplicationCommandModule
 
         var (puzzleNumber, score) = parsed.Value;
         var username = ctx.User.Username;
+        Console.WriteLine($"[FERMI] Parsed: Fermi No. {puzzleNumber}, Score: {score:0.##}×");
 
         if (FermiStore.HasSubmitted(puzzleNumber, ctx.User.Id))
         {
+            Console.WriteLine($"[FERMI] Duplicate submission attempt for Fermi No. {puzzleNumber} by {username}");
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
                     .WithContent($"You've already submitted your result for Fermi No. {puzzleNumber} - only one submission per puzzle.")
@@ -102,6 +106,7 @@ public class FermiCommands : ApplicationCommandModule
         }
 
         FermiStore.RecordResult(puzzleNumber, ctx.User.Id, username, score, resultText);
+        Console.WriteLine($"[FERMI] Successfully recorded Fermi No. {puzzleNumber} result for {username}: {score:0.##}×");
 
         await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
             new DiscordInteractionResponseBuilder()
@@ -113,6 +118,7 @@ public class FermiCommands : ApplicationCommandModule
         InteractionContext ctx,
         [Option("scope", "Today's puzzle, or all-time averages")] FermiScope scope = FermiScope.Today)
     {
+        Console.WriteLine($"[FERMI] /fermiboard command executed by {ctx.User.Username}, scope: {scope}");
         var data = FermiStore.Load();
 
         if (data.Count == 0)
@@ -179,7 +185,9 @@ public class FermiCommands : ApplicationCommandModule
         InteractionContext ctx,
         [Option("user", "Whose stats to view (defaults to you)")] DiscordUser? user = null)
     {
+        Console.WriteLine($"[FERMI] /fermistats command executed by {ctx.User.Username}");
         var target = user ?? ctx.User;
+        Console.WriteLine($"[FERMI] Viewing stats for: {target.Username}");
         var data = FermiStore.Load();
 
         var entries = data
