@@ -91,6 +91,7 @@ namespace AutoStrykeNew
             string apiKey, string teamName, string teamTag, string region)
         {
             Console.WriteLine($"[PREMIER] Starting Premier poll check for {teamName}#{teamTag} in {region}");
+            Console.WriteLine($"[PREMIER] API Key (first 10 chars): {apiKey.Substring(0, Math.Min(10, apiKey.Length))}...");
             
             if (string.IsNullOrWhiteSpace(apiKey) || string.IsNullOrWhiteSpace(teamName))
             {
@@ -109,6 +110,7 @@ namespace AutoStrykeNew
             if (string.IsNullOrWhiteSpace(teamId))
             {
                 Console.WriteLine($"[PREMIER] Could not find team ID for {teamName}#{teamTag}");
+                Console.WriteLine($"[PREMIER] Team response was null or empty");
                 return 0;
             }
             
@@ -217,15 +219,25 @@ namespace AutoStrykeNew
         {
             try
             {
+                Console.WriteLine($"[PREMIER] API Request: {path}");
                 var response = await Http.GetAsync(path);
+                Console.WriteLine($"[PREMIER] API Response: {response.StatusCode}");
+                
                 if (!response.IsSuccessStatusCode)
+                {
+                    Console.WriteLine($"[PREMIER] API request failed: {response.StatusCode} for {path}");
+                    var errorContent = await response.Content.ReadAsStringAsync();
+                    Console.WriteLine($"[PREMIER] Error content: {errorContent}");
                     return null;
+                }
 
                 var json = await response.Content.ReadAsStringAsync();
+                Console.WriteLine($"[PREMIER] Response length: {json.Length} characters");
                 return JsonConvert.DeserializeObject<T>(json);
             }
-            catch
+            catch (Exception ex)
             {
+                Console.WriteLine($"[PREMIER] API request exception: {ex.Message}");
                 return null;
             }
         }

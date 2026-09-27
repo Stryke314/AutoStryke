@@ -71,6 +71,7 @@ namespace AutoStrykeNew
 
             // Initial Premier check on startup to catch any matches that completed while bot was offline
             Console.WriteLine("[STARTUP] Running initial Premier check to catch any missed matches...");
+            Console.WriteLine($"[STARTUP] Premier config - Team: {jsonreader.premierTeamName}#{jsonreader.premierTeamTag}, Region: {jsonreader.premierRegion}");
             try
             {
                 var initialAdded = await PremierResultsPoller.CheckForNewResults(
@@ -87,6 +88,7 @@ namespace AutoStrykeNew
             catch (Exception ex)
             {
                 Console.WriteLine($"[STARTUP] Initial Premier check failed: {ex.Message}");
+                Console.WriteLine($"[STARTUP] Exception details: {ex.StackTrace}");
             }
 
             Console.WriteLine("========================================");
