@@ -146,7 +146,7 @@ namespace AutoStrykeNew
             {
                 Console.WriteLine($"[PREMIER] Processing match {match.id} from {match.started_at}");
                 var detail = await GetJson<MatchDetailResponse>(
-                    $"/valorant/v4/match/{region}/pc/{match.id}");
+                    $"/valorant/v4/match/{region}/{match.id}");
 
                 if (detail?.data is null)
                 {
