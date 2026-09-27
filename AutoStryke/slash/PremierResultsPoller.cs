@@ -126,6 +126,12 @@ namespace AutoStrykeNew
             var seenIds = LoadSeenMatchIds();
             var newMatches = matches.Where(m => !seenIds.Contains(m.id)).ToList();
             Console.WriteLine($"[PREMIER] Found {newMatches.Count} new matches to process");
+            
+            if (matches.Count > 0)
+            {
+                Console.WriteLine($"[PREMIER] First match ID in history: {matches[0].id}");
+                Console.WriteLine($"[PREMIER] Last match ID in history: {matches[matches.Count - 1].id}");
+            }
 
             if (newMatches.Count == 0)
             {
@@ -245,11 +251,18 @@ namespace AutoStrykeNew
         private static HashSet<string> LoadSeenMatchIds()
         {
             var filePath = GetSeenMatchesFilePath();
+            Console.WriteLine($"[PREMIER] Loading seen match IDs from: {filePath}");
+            
             if (!File.Exists(filePath))
+            {
+                Console.WriteLine($"[PREMIER] Seen matches file does not exist - starting with empty list");
                 return new HashSet<string>();
+            }
 
             var json = File.ReadAllText(filePath);
-            return JsonConvert.DeserializeObject<HashSet<string>>(json) ?? new HashSet<string>();
+            var seenIds = JsonConvert.DeserializeObject<HashSet<string>>(json) ?? new HashSet<string>();
+            Console.WriteLine($"[PREMIER] Loaded {seenIds.Count} seen match IDs");
+            return seenIds;
         }
 
         private static void SaveSeenMatchIds(HashSet<string> ids)
