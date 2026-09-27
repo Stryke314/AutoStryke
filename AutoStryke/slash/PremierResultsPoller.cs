@@ -60,6 +60,10 @@ namespace AutoStrykeNew
             public int points_before { get; set; }
             public int points_after { get; set; }
             public DateTime started_at { get; set; }
+            public int rounds_won { get; set; }
+            public int rounds_lost { get; set; }
+            public string map { get; set; }
+            public string opponent { get; set; }
         }
 
         // Minimal shape of the fields we actually need from a full match object.
@@ -145,43 +149,65 @@ namespace AutoStrykeNew
             foreach (var match in newMatches)
             {
                 Console.WriteLine($"[PREMIER] Processing match {match.id} from {match.started_at}");
-                var detail = await GetJson<MatchDetailResponse>(
-                    $"/valorant/v4/match/{region}/{match.id}");
+                Console.WriteLine($"[PREMIER] Match data available - points: {match.points_before}→{match.points_after}, rounds: {match.rounds_won}-{match.rounds_lost}, map: {match.map}, opponent: {match.opponent}");
 
-                if (detail?.data is null)
+                // Try to use data from Premier history response first
+                if (!string.IsNullOrWhiteSpace(match.map) && match.rounds_won > 0 && match.rounds_lost > 0)
                 {
-                    // Couldn't fetch detail (maybe not ready yet) - mark as seen
-                    // anyway using the points delta so it isn't retried forever,
-                    // but skip adding a detailed result for it.
-                    Console.WriteLine($"[PREMIER] Could not fetch details for match {match.id} - marking as seen");
+                    // Use data from Premier history
+                    var opponentName = !string.IsNullOrWhiteSpace(match.opponent) ? match.opponent : "Premier opponent";
+                    Console.WriteLine($"[PREMIER] Using Premier history data: {opponentName} on {match.map}, Score: {match.rounds_won}-{match.rounds_lost}");
+
+                    results.Add(new Program.MatchResult
+                    {
+                        Opponent = opponentName,
+                        Map = match.map,
+                        OurScore = match.rounds_won,
+                        TheirScore = match.rounds_lost,
+                        Date = match.started_at,
+                    });
+                    added++;
                     seenIds.Add(match.id);
-                    continue;
                 }
-
-                var ourTeam = detail.data.teams?.FirstOrDefault(t => t.team_id == teamId);
-                var theirTeam = detail.data.teams?.FirstOrDefault(t => t.team_id != teamId);
-
-                if (ourTeam is null || theirTeam is null)
+                else
                 {
-                    Console.WriteLine($"[PREMIER] Could not identify teams in match {match.id}");
+                    // Try to fetch from match detail endpoint
+                    Console.WriteLine($"[PREMIER] Premier history incomplete, trying match detail endpoint...");
+                    var detail = await GetJson<MatchDetailResponse>(
+                        $"/valorant/v4/match/{region}/{match.id}");
+
+                    if (detail?.data is null)
+                    {
+                        // Couldn't fetch detail - mark as seen anyway to avoid retries
+                        Console.WriteLine($"[PREMIER] Could not fetch details for match {match.id} - marking as seen and skipping");
+                        seenIds.Add(match.id);
+                        continue;
+                    }
+
+                    var ourTeam = detail.data.teams?.FirstOrDefault(t => t.team_id == teamId);
+                    var theirTeam = detail.data.teams?.FirstOrDefault(t => t.team_id != teamId);
+
+                    if (ourTeam is null || theirTeam is null)
+                    {
+                        Console.WriteLine($"[PREMIER] Could not identify teams in match {match.id}");
+                        seenIds.Add(match.id);
+                        continue;
+                    }
+
+                    var opponentName = await ResolveTeamName(theirTeam.team_id) ?? "Premier opponent";
+                    Console.WriteLine($"[PREMIER] Match details: {opponentName} on {detail.data.metadata?.map}, Score: {ourTeam.rounds_won}-{theirTeam.rounds_won}");
+
+                    results.Add(new Program.MatchResult
+                    {
+                        Opponent = opponentName,
+                        Map = detail.data.metadata?.map ?? "Unknown",
+                        OurScore = ourTeam.rounds_won,
+                        TheirScore = theirTeam.rounds_won,
+                        Date = match.started_at,
+                    });
+                    added++;
                     seenIds.Add(match.id);
-                    continue;
                 }
-
-                var opponentName = await ResolveTeamName(theirTeam.team_id) ?? "Premier opponent";
-                Console.WriteLine($"[PREMIER] Match details: {opponentName} on {detail.data.metadata?.map}, Score: {ourTeam.rounds_won}-{theirTeam.rounds_won}");
-
-                results.Add(new Program.MatchResult
-                {
-                    Opponent = opponentName,
-                    Map = detail.data.metadata?.map ?? "Unknown",
-                    OurScore = ourTeam.rounds_won,
-                    TheirScore = theirTeam.rounds_won,
-                    Date = match.started_at,
-                });
-
-                seenIds.Add(match.id);
-                added++;
                 Console.WriteLine($"[PREMIER] Successfully recorded match {match.id}");
             }
 
