@@ -30,7 +30,7 @@ public static class FermiStore
     /// <summary>Validates if a Fermi score is within acceptable bounds</summary>
     public static bool ValidateScore(double score)
     {
-        return score > 0 && score <= MaxScore;
+        return score >= MaxScore;
     }
     
     /// <summary>Validates if the puzzle number is within acceptable range (today ± 1 day)</summary>

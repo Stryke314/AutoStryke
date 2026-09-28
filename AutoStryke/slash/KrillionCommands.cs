@@ -17,7 +17,7 @@ public static class KrillionStore
     private static readonly Regex PuzzleNumberPattern = new(@"Krillion\s*#(\d+)", RegexOptions.IgnoreCase);
     
     // Krillion started on 2024-01-01 with puzzle #1
-    private static readonly DateTime KrillionStartDate = new DateTime(2024, 1, 1);
+    private static readonly DateTime KrillionStartDate = new DateTime(2026, 7, 15);
     
     /// <summary>Gets the expected Krillion puzzle number for today's date</summary>
     public static int GetExpectedPuzzleNumber()
