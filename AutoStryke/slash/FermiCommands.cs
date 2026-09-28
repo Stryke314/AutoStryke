@@ -145,9 +145,19 @@ public class FermiCommands : ApplicationCommandModule
                     AverageScore = g.Average(x => x.Score),
                     DaysPlayed = g.Count(),
                 })
+                .Where(x => x.DaysPlayed >= 3) // Minimum 3 submissions required
                 .OrderBy(x => x.AverageScore)
                 .ThenBy(x => x.BestScore)
                 .ToList();
+
+            if (stats.Count == 0)
+            {
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent("No one has submitted enough results yet (minimum 3 submissions required for leaderboard).")
+                        .AsEphemeral(true));
+                return;
+            }
 
             var rows = stats.Select((s, i) => new[]
             {

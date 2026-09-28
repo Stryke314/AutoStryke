@@ -69,7 +69,7 @@ namespace AutoStryke.slash
                 Console.WriteLine($"[PROFILE] No game results found for {target.Username}");
                 await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                     new DiscordInteractionResponseBuilder()
-                        .WithContent($"**{target.Username}** hasn't submitted any game results yet. Use `/krillion` or `/fermi` to get started!")
+                        .WithContent($"**{target.Username}** hasn't submitted any game results yet. Paste your Krillion or Fermi share text to get started!")
                         .AsEphemeral(true));
                 return;
             }
@@ -174,6 +174,116 @@ namespace AutoStryke.slash
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder().AddEmbed(embed));
             Console.WriteLine($"[PROFILE] Successfully displayed profile for {target.Username}");
+        }
+
+        [SlashCommand("compare", "Compare your stats with another user")]
+        public async Task Compare(
+            InteractionContext ctx,
+            [Option("user", "User to compare with")] DiscordUser user)
+        {
+            Console.WriteLine($"[COMPARE] /compare command executed by {ctx.User.Username} comparing with {user.Username}");
+            Console.WriteLine($"[COMPARE] User1: {ctx.User.Username} (ID: {ctx.User.Id}), User2: {user.Username} (ID: {user.Id})");
+            
+            var krillionData = LoadKrillionData();
+            var fermiData = LoadFermiData();
+
+            var user1 = ctx.User;
+            var user2 = user;
+
+            var user1Krillion = krillionData
+                .Where(kv => kv.Value.ContainsKey(user1.Id))
+                .Select(kv => (Puzzle: kv.Key, Score: kv.Value[user1.Id].Score))
+                .ToList();
+
+            var user2Krillion = krillionData
+                .Where(kv => kv.Value.ContainsKey(user2.Id))
+                .Select(kv => (Puzzle: kv.Key, Score: kv.Value[user2.Id].Score))
+                .ToList();
+
+            var user1Fermi = fermiData
+                .Where(kv => kv.Value.ContainsKey(user1.Id))
+                .Select(kv => (Puzzle: kv.Key, Score: kv.Value[user1.Id].Score))
+                .ToList();
+
+            var user2Fermi = fermiData
+                .Where(kv => kv.Value.ContainsKey(user2.Id))
+                .Select(kv => (Puzzle: kv.Key, Score: kv.Value[user2.Id].Score))
+                .ToList();
+
+            if (user1Krillion.Count == 0 && user1Fermi.Count == 0)
+            {
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent($"You haven't submitted any results yet!")
+                        .AsEphemeral(true));
+                return;
+            }
+
+            if (user2Krillion.Count == 0 && user2Fermi.Count == 0)
+            {
+                await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                    new DiscordInteractionResponseBuilder()
+                        .WithContent($"**{user2.Username}** hasn't submitted any results yet!")
+                        .AsEphemeral(true));
+                return;
+            }
+
+            var embed = new DiscordEmbedBuilder()
+                .WithTitle($"⚔️ {user1.Username} vs {user2.Username}")
+                .WithColor(DiscordColor.Orange)
+                .WithTimestamp(DateTime.UtcNow);
+
+            // Krillion Comparison
+            if (user1Krillion.Count > 0 || user2Krillion.Count > 0)
+            {
+                var u1Avg = user1Krillion.Count > 0 ? user1Krillion.Average(x => x.Score) : 0;
+                var u2Avg = user2Krillion.Count > 0 ? user2Krillion.Average(x => x.Score) : 0;
+                var u1Best = user1Krillion.Count > 0 ? user1Krillion.Max(x => x.Score) : 0;
+                var u2Best = user2Krillion.Count > 0 ? user2Krillion.Max(x => x.Score) : 0;
+                var u1Days = user1Krillion.Count;
+                var u2Days = user2Krillion.Count;
+
+                var krillionWinner = u1Avg > u2Avg ? user1.Username : (u2Avg > u1Avg ? user2.Username : "Tie");
+                var krillionWinnerEmoji = u1Avg > u2Avg ? "🏆" : (u2Avg > u1Avg ? "🏆" : "🤝");
+
+                embed.AddField("🦐 Krillion Comparison",
+                    $"**{user1.Username}:** Avg {u1Avg:0.#} | Best {u1Best} | {u1Days} days\n" +
+                    $"**{user2.Username}:** Avg {u2Avg:0.#} | Best {u2Best} | {u2Days} days\n" +
+                    $"**Winner:** {krillionWinnerEmoji} {krillionWinner}", true);
+            }
+
+            // Fermi Comparison
+            if (user1Fermi.Count > 0 || user2Fermi.Count > 0)
+            {
+                var u1Avg = user1Fermi.Count > 0 ? user1Fermi.Average(x => x.Score) : 0;
+                var u2Avg = user2Fermi.Count > 0 ? user2Fermi.Average(x => x.Score) : 0;
+                var u1Best = user1Fermi.Count > 0 ? user1Fermi.Min(x => x.Score) : 0; // lower is better
+                var u2Best = user2Fermi.Count > 0 ? user2Fermi.Min(x => x.Score) : 0;
+                var u1Days = user1Fermi.Count;
+                var u2Days = user2Fermi.Count;
+
+                var fermiWinner = u1Avg < u2Avg ? user1.Username : (u2Avg < u1Avg ? user2.Username : "Tie");
+                var fermiWinnerEmoji = u1Avg < u2Avg ? "🏆" : (u2Avg < u1Avg ? "🏆" : "🤝");
+
+                embed.AddField("🔢 Fermi Comparison",
+                    $"**{user1.Username}:** Avg {u1Avg:0.##}× | Best {u1Best:0.##}× | {u1Days} days\n" +
+                    $"**{user2.Username}:** Avg {u2Avg:0.##}× | Best {u2Best:0.##}× | {u2Days} days\n" +
+                    $"**Winner:** {fermiWinnerEmoji} {fermiWinner}", true);
+            }
+
+            // Overall Comparison
+            var u1Total = user1Krillion.Count + user1Fermi.Count;
+            var u2Total = user2Krillion.Count + user2Fermi.Count;
+            var overallWinner = u1Total > u2Total ? user1.Username : (u2Total > u1Total ? user2.Username : "Tie");
+
+            embed.AddField("📊 Overall",
+                $"**{user1.Username}:** {u1Total} total submissions\n" +
+                $"**{user2.Username}:** {u2Total} total submissions\n" +
+                $"**Most Active:** {overallWinner}", false);
+
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder().AddEmbed(embed));
+            Console.WriteLine($"[COMPARE] Successfully displayed comparison between {user1.Username} and {user2.Username}");
         }
 
         /// <summary>Computes (current, longest) streaks of consecutive puzzle numbers from a sorted-ascending list.</summary>
