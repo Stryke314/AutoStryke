@@ -13,7 +13,32 @@ public record KrillionEntry(string Username, int Score, string RawShare, DateTim
 public static class KrillionStore
 {
     private const string JsonFile = "krillion_results.json";
+    public const int MaxScore = 700;
     private static readonly Regex PuzzleNumberPattern = new(@"Krillion\s*#(\d+)", RegexOptions.IgnoreCase);
+    
+    // Krillion started on 2024-01-01 with puzzle #1
+    private static readonly DateTime KrillionStartDate = new DateTime(2024, 1, 1);
+    
+    /// <summary>Gets the expected Krillion puzzle number for today's date</summary>
+    public static int GetExpectedPuzzleNumber()
+    {
+        var daysSinceStart = (DateTime.UtcNow - KrillionStartDate).Days;
+        return daysSinceStart + 1;
+    }
+    
+    /// <summary>Validates if a Krillion score is within acceptable bounds</summary>
+    public static bool ValidateScore(int score)
+    {
+        return score > 0 && score <= MaxScore;
+    }
+    
+    /// <summary>Validates if the puzzle number is within acceptable range (today ± 1 day)</summary>
+    public static bool ValidatePuzzleNumber(int puzzleNumber)
+    {
+        var expected = GetExpectedPuzzleNumber();
+        var tolerance = 1; // Allow 1 day tolerance for timezone/early submissions
+        return puzzleNumber >= expected - tolerance && puzzleNumber <= expected + tolerance;
+    }
 
     /// <summary>Parses a raw message into (puzzleNumber, score), or null if it isn't a valid Krillion share.</summary>
     public static (int PuzzleNumber, int Score)? TryParse(string text)
@@ -100,6 +125,29 @@ public class KrillionCommands : ApplicationCommandModule
         var (puzzleNumber, score) = parsed.Value;
         var username = ctx.User.Username;
         Console.WriteLine($"[KRILLION] Parsed: Krillion #{puzzleNumber}, Score: {score}");
+
+        // Anti-cheat: Validate score is within bounds
+        if (!KrillionStore.ValidateScore(score))
+        {
+            Console.WriteLine($"[KRILLION] REJECTED: Invalid score {score} from {username} (max: {KrillionStore.MaxScore})");
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent($"❌ Invalid score: {score}. Krillion scores must be between 1 and {KrillionStore.MaxScore}.")
+                    .AsEphemeral(true));
+            return;
+        }
+
+        // Anti-cheat: Validate puzzle number matches expected day
+        if (!KrillionStore.ValidatePuzzleNumber(puzzleNumber))
+        {
+            var expected = KrillionStore.GetExpectedPuzzleNumber();
+            Console.WriteLine($"[KRILLION] REJECTED: Puzzle #{puzzleNumber} doesn't match expected #{expected} from {username}");
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent($"❌ Invalid puzzle number: #{puzzleNumber}. Today's puzzle is #{expected}.")
+                    .AsEphemeral(true));
+            return;
+        }
 
         if (KrillionStore.HasSubmitted(puzzleNumber, ctx.User.Id))
         {

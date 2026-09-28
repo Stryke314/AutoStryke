@@ -462,6 +462,22 @@ namespace AutoStrykeNew
                     var (puzzleNumber, score) = krillionResult.Value;
                     Console.WriteLine($"[AUTO-DETECT] Detected Krillion share from {e.Author.Username}: Krillion #{puzzleNumber}, Score: {score}");
 
+                    // Anti-cheat: Validate score
+                    if (!KrillionStore.ValidateScore(score))
+                    {
+                        Console.WriteLine($"[AUTO-DETECT] REJECTED: Invalid Krillion score {score} from {e.Author.Username}");
+                        await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("❌"));
+                        return;
+                    }
+
+                    // Anti-cheat: Validate puzzle number
+                    if (!KrillionStore.ValidatePuzzleNumber(puzzleNumber))
+                    {
+                        Console.WriteLine($"[AUTO-DETECT] REJECTED: Invalid Krillion puzzle #{puzzleNumber} from {e.Author.Username}");
+                        await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("❌"));
+                        return;
+                    }
+
                     if (KrillionStore.HasSubmitted(puzzleNumber, e.Author.Id))
                     {
                         Console.WriteLine($"[AUTO-DETECT] Duplicate Krillion submission from {e.Author.Username} for #{puzzleNumber}");
@@ -481,6 +497,22 @@ namespace AutoStrykeNew
                 {
                     var (puzzleNumber, score) = fermiResult.Value;
                     Console.WriteLine($"[AUTO-DETECT] Detected Fermi share from {e.Author.Username}: Fermi No. {puzzleNumber}, Score: {score:0.##}×");
+
+                    // Anti-cheat: Validate score
+                    if (!FermiStore.ValidateScore(score))
+                    {
+                        Console.WriteLine($"[AUTO-DETECT] REJECTED: Invalid Fermi score {score:0.##}× from {e.Author.Username}");
+                        await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("❌"));
+                        return;
+                    }
+
+                    // Anti-cheat: Validate puzzle number
+                    if (!FermiStore.ValidatePuzzleNumber(puzzleNumber))
+                    {
+                        Console.WriteLine($"[AUTO-DETECT] REJECTED: Invalid Fermi puzzle No. {puzzleNumber} from {e.Author.Username}");
+                        await e.Message.CreateReactionAsync(DiscordEmoji.FromUnicode("❌"));
+                        return;
+                    }
 
                     if (FermiStore.HasSubmitted(puzzleNumber, e.Author.Id))
                     {

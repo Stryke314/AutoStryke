@@ -13,8 +13,33 @@ public record FermiEntry(string Username, double Score, string RawShare, DateTim
 public static class FermiStore
 {
     private const string JsonFile = "fermi_results.json";
+    public const double MaxScore = 1.0;
     private static readonly Regex PuzzleNumberPattern = new(@"No\.\s*#?(\d+)", RegexOptions.IgnoreCase);
     private static readonly Regex ScorePattern = new(@"([\d.]+)\s*[×xX]\s*score", RegexOptions.IgnoreCase);
+    
+    // Fermi started on 2024-01-01 with puzzle #1
+    private static readonly DateTime FermiStartDate = new DateTime(2024, 1, 1);
+    
+    /// <summary>Gets the expected Fermi puzzle number for today's date</summary>
+    public static int GetExpectedPuzzleNumber()
+    {
+        var daysSinceStart = (DateTime.UtcNow - FermiStartDate).Days;
+        return daysSinceStart + 1;
+    }
+    
+    /// <summary>Validates if a Fermi score is within acceptable bounds</summary>
+    public static bool ValidateScore(double score)
+    {
+        return score > 0 && score <= MaxScore;
+    }
+    
+    /// <summary>Validates if the puzzle number is within acceptable range (today ± 1 day)</summary>
+    public static bool ValidatePuzzleNumber(int puzzleNumber)
+    {
+        var expected = GetExpectedPuzzleNumber();
+        var tolerance = 1; // Allow 1 day tolerance for timezone/early submissions
+        return puzzleNumber >= expected - tolerance && puzzleNumber <= expected + tolerance;
+    }
 
     /// <summary>Parses a raw message into (puzzleNumber, score), or null if it isn't a valid Fermi share.</summary>
     public static (int PuzzleNumber, double Score)? TryParse(string text)
@@ -94,6 +119,29 @@ public class FermiCommands : ApplicationCommandModule
         var (puzzleNumber, score) = parsed.Value;
         var username = ctx.User.Username;
         Console.WriteLine($"[FERMI] Parsed: Fermi No. {puzzleNumber}, Score: {score:0.##}×");
+
+        // Anti-cheat: Validate score is within bounds
+        if (!FermiStore.ValidateScore(score))
+        {
+            Console.WriteLine($"[FERMI] REJECTED: Invalid score {score:0.##}× from {username} (max: {FermiStore.MaxScore}×)");
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent($"❌ Invalid score: {score:0.##}×. Fermi scores must be between 0 and {FermiStore.MaxScore}×.")
+                    .AsEphemeral(true));
+            return;
+        }
+
+        // Anti-cheat: Validate puzzle number matches expected day
+        if (!FermiStore.ValidatePuzzleNumber(puzzleNumber))
+        {
+            var expected = FermiStore.GetExpectedPuzzleNumber();
+            Console.WriteLine($"[FERMI] REJECTED: Puzzle No. {puzzleNumber} doesn't match expected No. {expected} from {username}");
+            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
+                new DiscordInteractionResponseBuilder()
+                    .WithContent($"❌ Invalid puzzle number: No. {puzzleNumber}. Today's puzzle is No. {expected}.")
+                    .AsEphemeral(true));
+            return;
+        }
 
         if (FermiStore.HasSubmitted(puzzleNumber, ctx.User.Id))
         {
