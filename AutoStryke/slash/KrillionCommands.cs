@@ -104,69 +104,6 @@ public class KrillionCommands : ApplicationCommandModule
         [ChoiceName("All Time")] AllTime,
     }
 
-    [SlashCommand("krillion", "Submit your daily Krillion result (paste the full share text)")]
-    public async Task SubmitKrillion(
-        InteractionContext ctx,
-        [Option("result", "Paste your Krillion share text here")] string resultText)
-    {
-        Console.WriteLine($"[KRILLION] /krillion command executed by {ctx.User.Username} (ID: {ctx.User.Id})");
-        var parsed = KrillionStore.TryParse(resultText);
-
-        if (parsed is null)
-        {
-            Console.WriteLine($"[KRILLION] Invalid Krillion share format from {ctx.User.Username}");
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent("That doesn't look like a Krillion share - paste the whole result, starting with \"Krillion #...\" and ending with your score.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        var (puzzleNumber, score) = parsed.Value;
-        var username = ctx.User.Username;
-        Console.WriteLine($"[KRILLION] Parsed: Krillion #{puzzleNumber}, Score: {score}");
-
-        // Anti-cheat: Validate score is within bounds
-        if (!KrillionStore.ValidateScore(score))
-        {
-            Console.WriteLine($"[KRILLION] REJECTED: Invalid score {score} from {username} (max: {KrillionStore.MaxScore})");
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent($"❌ Invalid score: {score}. Krillion scores must be between 1 and {KrillionStore.MaxScore}.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        // Anti-cheat: Validate puzzle number matches expected day
-        if (!KrillionStore.ValidatePuzzleNumber(puzzleNumber))
-        {
-            var expected = KrillionStore.GetExpectedPuzzleNumber();
-            Console.WriteLine($"[KRILLION] REJECTED: Puzzle #{puzzleNumber} doesn't match expected #{expected} from {username}");
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent($"❌ Invalid puzzle number: #{puzzleNumber}. Today's puzzle is #{expected}.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        if (KrillionStore.HasSubmitted(puzzleNumber, ctx.User.Id))
-        {
-            Console.WriteLine($"[KRILLION] Duplicate submission attempt for Krillion #{puzzleNumber} by {username}");
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent($"You've already submitted your result for Krillion #{puzzleNumber} - only one submission per puzzle.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        KrillionStore.RecordResult(puzzleNumber, ctx.User.Id, username, score, resultText);
-        Console.WriteLine($"[KRILLION] Successfully recorded Krillion #{puzzleNumber} result for {username}: {score}");
-
-        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-            new DiscordInteractionResponseBuilder()
-                .WithContent($"🦐 Recorded **{username}**'s Krillion #{puzzleNumber} result: **{score}**"));
-    }
-
     [SlashCommand("krillionboard", "Show the Krillion leaderboard")]
     public async Task KrillionLeaderboard(
         InteractionContext ctx,
@@ -179,7 +116,7 @@ public class KrillionCommands : ApplicationCommandModule
         {
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
-                    .WithContent("No Krillion results submitted yet - use `/krillion` to add one.")
+                    .WithContent("No Krillion results submitted yet - paste your Krillion share text to automatically add one.")
                     .AsEphemeral(true));
             return;
         }

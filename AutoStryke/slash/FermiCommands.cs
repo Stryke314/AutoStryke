@@ -98,69 +98,6 @@ public class FermiCommands : ApplicationCommandModule
         [ChoiceName("All Time")] AllTime,
     }
 
-    [SlashCommand("fermi", "Submit your daily Fermi result (paste the full share text)")]
-    public async Task SubmitFermi(
-        InteractionContext ctx,
-        [Option("result", "Paste your Fermi share text here")] string resultText)
-    {
-        Console.WriteLine($"[FERMI] /fermi command executed by {ctx.User.Username} (ID: {ctx.User.Id})");
-        var parsed = FermiStore.TryParse(resultText);
-
-        if (parsed is null)
-        {
-            Console.WriteLine($"[FERMI] Invalid Fermi share format from {ctx.User.Username}");
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent("That doesn't look like a Fermi share - paste the whole result, including the \"No. X\" line and the final \"...× score\" line.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        var (puzzleNumber, score) = parsed.Value;
-        var username = ctx.User.Username;
-        Console.WriteLine($"[FERMI] Parsed: Fermi No. {puzzleNumber}, Score: {score:0.##}×");
-
-        // Anti-cheat: Validate score is within bounds
-        if (!FermiStore.ValidateScore(score))
-        {
-            Console.WriteLine($"[FERMI] REJECTED: Invalid score {score:0.##}× from {username} (max: {FermiStore.MaxScore}×)");
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent($"❌ Invalid score: {score:0.##}×. Fermi scores must be between 0 and {FermiStore.MaxScore}×.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        // Anti-cheat: Validate puzzle number matches expected day
-        if (!FermiStore.ValidatePuzzleNumber(puzzleNumber))
-        {
-            var expected = FermiStore.GetExpectedPuzzleNumber();
-            Console.WriteLine($"[FERMI] REJECTED: Puzzle No. {puzzleNumber} doesn't match expected No. {expected} from {username}");
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent($"❌ Invalid puzzle number: No. {puzzleNumber}. Today's puzzle is No. {expected}.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        if (FermiStore.HasSubmitted(puzzleNumber, ctx.User.Id))
-        {
-            Console.WriteLine($"[FERMI] Duplicate submission attempt for Fermi No. {puzzleNumber} by {username}");
-            await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-                new DiscordInteractionResponseBuilder()
-                    .WithContent($"You've already submitted your result for Fermi No. {puzzleNumber} - only one submission per puzzle.")
-                    .AsEphemeral(true));
-            return;
-        }
-
-        FermiStore.RecordResult(puzzleNumber, ctx.User.Id, username, score, resultText);
-        Console.WriteLine($"[FERMI] Successfully recorded Fermi No. {puzzleNumber} result for {username}: {score:0.##}×");
-
-        await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
-            new DiscordInteractionResponseBuilder()
-                .WithContent($"🔢 Recorded **{username}**'s Fermi No. {puzzleNumber} result: **{score:0.##}×**"));
-    }
-
     [SlashCommand("fermiboard", "Show the Fermi leaderboard")]
     public async Task FermiLeaderboard(
         InteractionContext ctx,
@@ -173,7 +110,7 @@ public class FermiCommands : ApplicationCommandModule
         {
             await ctx.CreateResponseAsync(InteractionResponseType.ChannelMessageWithSource,
                 new DiscordInteractionResponseBuilder()
-                    .WithContent("No Fermi results submitted yet - use `/fermi` to add one.")
+                    .WithContent("No Fermi results submitted yet - paste your Fermi share text to automatically add one.")
                     .AsEphemeral(true));
             return;
         }
