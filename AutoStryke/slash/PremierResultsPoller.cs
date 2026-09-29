@@ -152,9 +152,9 @@ namespace AutoStrykeNew
                 Console.WriteLine($"[PREMIER] Match data available - points: {match.points_before}→{match.points_after}, rounds: {match.rounds_won}-{match.rounds_lost}, map: {match.map}, opponent: {match.opponent}");
 
                 // Try to use data from Premier history response first
-                if (!string.IsNullOrWhiteSpace(match.map) && match.rounds_won > 0 && match.rounds_lost > 0)
+                if (!string.IsNullOrWhiteSpace(match.map))
                 {
-                    // Use data from Premier history
+                    // Use data from Premier history (accept even if rounds are 0-0 for older matches)
                     var opponentName = !string.IsNullOrWhiteSpace(match.opponent) ? match.opponent : "Premier opponent";
                     Console.WriteLine($"[PREMIER] Using Premier history data: {opponentName} on {match.map}, Score: {match.rounds_won}-{match.rounds_lost}");
 
