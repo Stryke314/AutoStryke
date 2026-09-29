@@ -17,8 +17,8 @@ public static class FermiStore
     private static readonly Regex PuzzleNumberPattern = new(@"No\.\s*#?(\d+)", RegexOptions.IgnoreCase);
     private static readonly Regex ScorePattern = new(@"([\d.]+)\s*[×xX]\s*score", RegexOptions.IgnoreCase);
     
-    // Fermi started on 2024-01-01 with puzzle #1
-    private static readonly DateTime FermiStartDate = new DateTime(2024, 1, 1);
+    // Fermi started on 2026-07-27 with puzzle #1
+    private static readonly DateTime FermiStartDate = new DateTime(2026, 7, 27);
     
     /// <summary>Gets the expected Fermi puzzle number for today's date</summary>
     public static int GetExpectedPuzzleNumber()
