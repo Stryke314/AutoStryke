@@ -13,7 +13,7 @@ public record FermiEntry(string Username, double Score, string RawShare, DateTim
 public static class FermiStore
 {
     private const string JsonFile = "fermi_results.json";
-    public const double MaxScore = 1.0;
+    public const double MaxScore = 100.0; // Fermi scores can be much higher than 1.0x (they're multipliers)
     private static readonly Regex PuzzleNumberPattern = new(@"No\.\s*#?(\d+)", RegexOptions.IgnoreCase);
     private static readonly Regex ScorePattern = new(@"([\d.]+)\s*[×xX]\s*score", RegexOptions.IgnoreCase);
     
@@ -30,7 +30,7 @@ public static class FermiStore
     /// <summary>Validates if a Fermi score is within acceptable bounds</summary>
     public static bool ValidateScore(double score)
     {
-        return score >= MaxScore;
+        return score > 0 && score <= MaxScore; // Fermi scores can be much higher than 1.0×
     }
     
     /// <summary>Validates if the puzzle number is within acceptable range (today ± 1 day)</summary>
