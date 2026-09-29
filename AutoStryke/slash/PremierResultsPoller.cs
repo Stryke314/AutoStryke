@@ -173,14 +173,15 @@ namespace AutoStrykeNew
                 {
                     // Try to fetch from match detail endpoint
                     Console.WriteLine($"[PREMIER] Premier history incomplete, trying match detail endpoint...");
+                    // Add delay to avoid rate limiting
+                    await Task.Delay(1000); // 1 second delay between API calls
                     var detail = await GetJson<MatchDetailResponse>(
                         $"/valorant/v4/match/{region}/{match.id}");
 
                     if (detail?.data is null)
                     {
-                        // Couldn't fetch detail - mark as seen anyway to avoid retries
-                        Console.WriteLine($"[PREMIER] Could not fetch details for match {match.id} - marking as seen and skipping");
-                        seenIds.Add(match.id);
+                        // Couldn't fetch detail - do NOT mark as seen so it can be retried later
+                        Console.WriteLine($"[PREMIER] Could not fetch details for match {match.id} - skipping without marking as seen (will retry later)");
                         continue;
                     }
 
@@ -189,8 +190,7 @@ namespace AutoStrykeNew
 
                     if (ourTeam is null || theirTeam is null)
                     {
-                        Console.WriteLine($"[PREMIER] Could not identify teams in match {match.id}");
-                        seenIds.Add(match.id);
+                        Console.WriteLine($"[PREMIER] Could not identify teams in match {match.id} - skipping without marking as seen (will retry later)");
                         continue;
                     }
 
